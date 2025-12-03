@@ -98,8 +98,16 @@ def select_tempmail_url(account_config: Optional[Dict] = None) -> tuple[str, Opt
 
 def extract_verification_code(text: str) -> Optional[str]:
     """从文本中提取验证码（支持中英文格式）"""
+    # 先清理文本：将换行符替换为空格，合并多个空格，处理被换行拆分的提示语
+    # 例如 "一次性验证 \n码为：" -> "一次性验证 码为："
+    cleaned_text = re.sub(r'\s+', ' ', text)
+    # 再创建一个完全去除空格的版本，用于匹配被空格分隔的关键词
+    # 例如 "一次性验证 码为" -> "一次性验证码为"
+    no_space_text = re.sub(r'\s+', '', text)
+
     # 先按行精确匹配提示语，避免误匹配 Cloudflare/Logo/verification 等单词
-    lines = text.splitlines()
+    # 同时也对清理后的文本进行匹配
+    lines = text.splitlines() + [cleaned_text, no_space_text]
     for line in lines:
         line_lower = line.lower()
         idx = -1
@@ -170,7 +178,8 @@ def get_email_from_tempmail(page, tempmail_url: str) -> Optional[str]:
     """从临时邮箱服务获取邮箱地址"""
     # 调试日志已关闭
     # print("[临时邮箱] 正在访问临时邮箱网站...")
-    page.goto(tempmail_url, wait_until="networkidle", timeout=60000)
+    # 使用 domcontentloaded 而不是 networkidle，避免因 WebSocket/长轮询导致超时
+    page.goto(tempmail_url, wait_until="domcontentloaded", timeout=60000)
     page.wait_for_timeout(3000)
     
     # 判断 URL 是否包含 jwt（如果包含，说明已经指定了邮箱，不需要创建新邮箱）
@@ -435,7 +444,8 @@ def get_verification_code_from_tempmail_browser(page, timeout=120, tempmail_url:
             if tempmail_url not in current_url:
                 # 调试日志已关闭
                 # print("[临时邮箱] 当前页面不在临时邮箱 URL，重新导航...")
-                page.goto(tempmail_url, wait_until="networkidle", timeout=60000)
+                # 使用 domcontentloaded 而不是 networkidle，避免因 WebSocket/长轮询导致超时
+                page.goto(tempmail_url, wait_until="domcontentloaded", timeout=60000)
                 page.wait_for_timeout(3000)
         except:
             pass
@@ -646,12 +656,12 @@ def get_verification_code_from_tempmail_browser(page, timeout=120, tempmail_url:
                     except:
                         # 如果找不到返回按钮，重新加载收件箱页面
                         if tempmail_url:
-                            page.goto(tempmail_url, wait_until="networkidle", timeout=30000)
+                            page.goto(tempmail_url, wait_until="domcontentloaded", timeout=30000)
                         else:
                             # 如果没有提供 tempmail_url，尝试使用第一个邮箱 URL
                             if not TEMPMAIL_URLS:
                                 raise ValueError("未配置临时邮箱 URL，请在账号配置中添加 tempmail_url")
-                            page.goto(TEMPMAIL_URLS[0], wait_until="networkidle", timeout=30000)
+                            page.goto(TEMPMAIL_URLS[0], wait_until="domcontentloaded", timeout=30000)
                         page.wait_for_timeout(3000)
                         # 切换到收件箱标签
                         try:
@@ -713,12 +723,12 @@ def get_verification_code_from_tempmail_browser(page, timeout=120, tempmail_url:
                                         # print("[临时邮箱] ⚠ 点击后误跳转到发送邮件页面，返回...")
                                         # 返回收件箱并继续下一轮循环
                                         if tempmail_url:
-                                            page.goto(tempmail_url, wait_until="networkidle", timeout=30000)
+                                            page.goto(tempmail_url, wait_until="domcontentloaded", timeout=30000)
                                         else:
                                             # 如果没有提供 tempmail_url，尝试使用第一个邮箱 URL
                                             if not TEMPMAIL_URLS:
                                                 raise ValueError("未配置临时邮箱 URL，请在账号配置中添加 tempmail_url")
-                                            page.goto(TEMPMAIL_URLS[0], wait_until="networkidle", timeout=30000)
+                                            page.goto(TEMPMAIL_URLS[0], wait_until="domcontentloaded", timeout=30000)
                                         page.wait_for_timeout(2000)
                                         try:
                                             mailbox_tab = page.locator("div[data-name='mailbox']").first
@@ -2416,7 +2426,7 @@ def save_to_config(cookies_data: Dict[str, str], account_index: Optional[int] = 
         import traceback
         traceback.print_exc()
 
-def refresh_single_account(account_idx: int, account: dict, headless: bool = True, mode: str = "auto") -> bool:
+def refresh_single_account(account_idx: int, account: dict, headless: bool = True, mode: str = "browser") -> bool:
     """刷新单个账号的 Cookie（使用临时邮箱方式）
     
     Args:
