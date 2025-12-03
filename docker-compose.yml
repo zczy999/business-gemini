@@ -14,7 +14,6 @@ services:
       - ./video:/app/video:rw
       # 可选：挂载 .env 文件（推荐）
       # - ./.env:/app/.env:ro
-    user: "1000:1000"
     environment:
       - PYTHONUNBUFFERED=1
       - SERVER_PORT=8000

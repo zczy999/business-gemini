@@ -55,8 +55,6 @@ RUN mkdir -p /app/log /app/image /app/video && \
     chown -R appuser:appuser /app && \
     chown -R appuser:appuser /ms-playwright
 
-USER appuser
-
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
