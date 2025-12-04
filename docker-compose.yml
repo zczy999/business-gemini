@@ -5,6 +5,7 @@ services:
     build: .
     container_name: business-gemini-pool
     restart: unless-stopped
+    user: "0:0"  # 以 root 用户运行，避免挂载卷权限问题
     ports:
       - "8000:8000"
     volumes:
@@ -15,6 +16,7 @@ services:
       # 可选：挂载 .env 文件（推荐）
       # - ./.env:/app/.env:ro
     environment:
+      - TZ=Asia/Shanghai
       - PYTHONUNBUFFERED=1
       - SERVER_PORT=8000
       - SERVER_HOST=0.0.0.0
