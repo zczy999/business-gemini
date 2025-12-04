@@ -63,11 +63,8 @@ def ensure_jwt_for_account(account_idx: int, account: dict):
                 state = account_manager.account_states[account_idx]
                 state["jwt"] = new_jwt
                 state["jwt_time"] = time.time()
-                # JWT 刷新后，清除旧的 session，因为新的 JWT 与旧的 session 不匹配
-                if state["session"] is not None:
-                    # 调试日志已关闭
-                    # print(f"[DEBUG][ensure_jwt_for_account] JWT已刷新，清除旧session: {state['session']}")
-                    state["session"] = None
+                # JWT 刷新不影响 session，session 由 Gemini 服务端维护
+                # session 的过期由 ensure_session_for_account 中的 12小时/50次 规则控制
                 jwt = new_jwt
         except Exception as e:
             # 调试日志已关闭
