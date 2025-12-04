@@ -97,11 +97,12 @@ Session 管理位于 `session_manager.py`，核心数据结构：
 - `account_states[idx]["session_count"]` - session 使用次数
 - `account_states[idx]["session_created_time"]` - session 创建时间戳
 
-### 简化规则
+### 刷新规则
 
 每个账号只维护一个 session，更新条件：
-- **对话数超过 50 次** → 创建新 session
-- **超过 12 小时** → 创建新 session
+- **`refresh_session: true`** → 强制创建新 session
+- **对话数超过 20 次** → 创建新 session
+- **超过 6 小时** → 创建新 session
 
 ### JWT 与 Session 生命周期
 - JWT 有效期约 240 秒（4分钟），过期自动刷新

@@ -64,7 +64,7 @@ def ensure_jwt_for_account(account_idx: int, account: dict):
                 state["jwt"] = new_jwt
                 state["jwt_time"] = time.time()
                 # JWT 刷新不影响 session，session 由 Gemini 服务端维护
-                # session 的过期由 ensure_session_for_account 中的 12小时/50次 规则控制
+                # session 的过期由 ensure_session_for_account 中的 20次/6小时规则 或 force_refresh 参数控制
                 jwt = new_jwt
         except Exception as e:
             # 调试日志已关闭
@@ -132,16 +132,22 @@ def create_chat_session(jwt: str, team_id: str, proxy: str, account_idx: Optiona
     return session_name
 
 
-def ensure_session_for_account(account_idx: int, account: dict):
+def ensure_session_for_account(account_idx: int, account: dict, force_refresh: bool = False):
     """确保指定账号的会话有效
 
-    简化规则：
+    规则：
     - 每个账号只维护一个 session
-    - 对话数超过 50 次 → 更新 session
-    - 超过 12 小时 → 更新 session
+    - force_refresh=True 时强制创建新 session
+    - 对话数超过 20 次 → 更新 session
+    - 超过 6 小时 → 更新 session
+
+    Args:
+        account_idx: 账号索引
+        account: 账号信息字典
+        force_refresh: 是否强制刷新 session（默认 False）
     """
-    SESSION_MAX_COUNT = 50  # 最大对话次数
-    SESSION_MAX_AGE = 12 * 3600  # 12 小时（秒）
+    SESSION_MAX_COUNT = 20  # 最大对话次数
+    SESSION_MAX_AGE = 6 * 3600  # 6 小时（秒）
 
     start_time = time.time()
 
@@ -159,15 +165,20 @@ def ensure_session_for_account(account_idx: int, account: dict):
         # 判断是否需要创建新 session
         need_new_session = (
             current_session is None or  # 没有 session
-            session_count >= SESSION_MAX_COUNT or  # 超过 50 次
-            session_age >= SESSION_MAX_AGE  # 超过 12 小时
+            force_refresh or  # 强制刷新
+            session_count >= SESSION_MAX_COUNT or  # 超过 20 次
+            session_age >= SESSION_MAX_AGE  # 超过 6 小时
         )
 
         if need_new_session:
-            reason = "无 session" if current_session is None else (
-                f"超过 {SESSION_MAX_COUNT} 次" if session_count >= SESSION_MAX_COUNT else
-                f"超过 {SESSION_MAX_AGE // 3600} 小时"
-            )
+            if current_session is None:
+                reason = "无 session"
+            elif force_refresh:
+                reason = "强制刷新"
+            elif session_count >= SESSION_MAX_COUNT:
+                reason = f"超过 {SESSION_MAX_COUNT} 次"
+            else:
+                reason = f"超过 {SESSION_MAX_AGE // 3600} 小时"
 
             from .utils import get_proxy
             proxy = get_proxy()

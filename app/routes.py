@@ -316,6 +316,7 @@ def register_routes(app):
             messages = data.get('messages', [])
             prompts = data.get('prompts', [])
             stream = data.get('stream', False)
+            refresh_session = data.get('refresh_session', False)  # 是否强制刷新 session
 
             # 检查 response_format 参数（OpenAI 兼容）
             response_format = data.get('response_format', {})
@@ -541,8 +542,8 @@ def register_routes(app):
                         team_id = account.get("team_id")
                         print(f"[检测] ✓ 使用文件关联的 session: {session}（跳过会话创建）")
                     else:
-                        # 正常创建或复用 session（简化规则：超过 50 次或 12 小时更新）
-                        session, jwt, team_id = ensure_session_for_account(account_idx, account)
+                        # 正常创建或复用 session（支持 refresh_session 强制刷新）
+                        session, jwt, team_id = ensure_session_for_account(account_idx, account, force_refresh=refresh_session)
                     from .utils import get_proxy
                     proxy = get_proxy()
                     
