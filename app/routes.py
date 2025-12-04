@@ -304,8 +304,12 @@ def register_routes(app):
         try:
             cleanup_expired_images()
             cleanup_expired_videos()
-            
+
             data = request.json
+
+            # ✅ 打印请求参数日志
+            print(f"[DEBUG] 请求参数: {json.dumps(data, ensure_ascii=False, default=str)}")
+
             requested_model = data.get('model', 'gemini-enterprise')  # 更新 requested_model
             auto_model_aliases = {"auto", "local-gemini-auto"}
             is_auto_model = requested_model in auto_model_aliases
