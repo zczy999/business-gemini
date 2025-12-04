@@ -5,16 +5,14 @@ import logging
 import os
 from pathlib import Path
 from datetime import datetime
-from logging.handlers import RotatingFileHandler
+from logging.handlers import TimedRotatingFileHandler
 from .config import LOG_LEVELS, CURRENT_LOG_LEVEL, CURRENT_LOG_LEVEL_NAME
 
 _original_print = builtins.print
 
-# 日志文件夹和文件配置
+# 日志文件夹配置
 LOG_DIR = Path(__file__).parent.parent / "log"
 LOG_DIR.mkdir(exist_ok=True)
-LOG_FILE = LOG_DIR / "app.log"
-ERROR_LOG_FILE = LOG_DIR / "error.log"
 
 # 配置日志记录器
 _logger = logging.getLogger("business_gemini_pool")
@@ -27,25 +25,31 @@ if not _logger.handlers:
         '%(asctime)s - %(levelname)s - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
-    
-    # 所有日志文件处理器（按大小轮转，最大10MB，保留5个备份）
-    file_handler = RotatingFileHandler(
-        LOG_FILE,
-        maxBytes=10 * 1024 * 1024,  # 10MB
-        backupCount=5,
+
+    # 所有日志文件处理器（按日期轮转，每天午夜生成新文件，保留30天）
+    file_handler = TimedRotatingFileHandler(
+        LOG_DIR / "app.log",
+        when='midnight',
+        interval=1,
+        backupCount=30,
         encoding='utf-8'
     )
+    file_handler.suffix = "%Y-%m-%d.log"  # 轮转后文件名格式: app.log.2024-01-15.log
+    file_handler.namer = lambda name: name.replace(".log.", "-").replace(".log", "")  # 文件名格式: app-2024-01-15.log
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(formatter)
     _logger.addHandler(file_handler)
-    
-    # 错误日志文件处理器（只记录 ERROR 级别）
-    error_file_handler = RotatingFileHandler(
-        ERROR_LOG_FILE,
-        maxBytes=10 * 1024 * 1024,  # 10MB
-        backupCount=5,
+
+    # 错误日志文件处理器（按日期轮转，只记录 ERROR 级别，保留30天）
+    error_file_handler = TimedRotatingFileHandler(
+        LOG_DIR / "error.log",
+        when='midnight',
+        interval=1,
+        backupCount=30,
         encoding='utf-8'
     )
+    error_file_handler.suffix = "%Y-%m-%d.log"
+    error_file_handler.namer = lambda name: name.replace(".log.", "-").replace(".log", "")  # 文件名格式: error-2024-01-15.log
     error_file_handler.setLevel(logging.ERROR)
     error_file_handler.setFormatter(formatter)
     _logger.addHandler(error_file_handler)
