@@ -5,7 +5,6 @@
 import json
 import time
 import uuid
-import hashlib
 import mimetypes
 import re
 import secrets
@@ -344,17 +343,36 @@ def register_routes(app):
                     str(selected_model_config.get("api_model_id", ""))
                 ])
             is_video_model = any("video" in (identifier or "").lower() for identifier in video_identifiers)
-            
+
+            system_message = ""
             user_message = ""
             input_images = []
             input_file_ids = []
-            
+
             def extract_user_query(text: str) -> str:
                 match = re.search(r'<user_query>(.*?)</user_query>', text, re.DOTALL)
                 if match:
                     return match.group(1).strip()
                 return text
-            
+
+            # 提取 system 消息
+            for msg in messages:
+                if msg.get('role') == 'system':
+                    content = msg.get('content', '')
+                    if isinstance(content, str):
+                        system_message = content
+                    elif isinstance(content, list):
+                        # 数组格式，提取文本部分
+                        text_parts = []
+                        for item in content:
+                            if isinstance(item, dict) and item.get('type') == 'text':
+                                text_parts.append(item.get('text', ''))
+                            elif isinstance(item, str):
+                                text_parts.append(item)
+                        system_message = '\n'.join(text_parts)
+                    break  # 只取第一个 system 消息
+
+            # 提取 user 消息
             for msg in messages:
                 if msg.get('role') == 'user':
                     content = msg.get('content', '')
@@ -362,7 +380,7 @@ def register_routes(app):
                     if text:
                         user_message = extract_user_query(text)
                     input_images.extend(images)
-                    
+
                     if isinstance(content, list):
                         for item in content:
                             if isinstance(item, dict):
@@ -373,6 +391,12 @@ def register_routes(app):
                                     fid = file_obj.get('file_id') or file_obj.get('id')
                                     if fid:
                                         input_file_ids.append(fid)
+
+            # 拼接 system 消息到 user 消息前面
+            if system_message and user_message:
+                user_message = f"[System Instruction]\n{system_message}\n\n[User Message]\n{user_message}"
+            elif system_message and not user_message:
+                user_message = f"[System Instruction]\n{system_message}"
             
             for prompt in prompts:
                 if prompt.get('role') == 'user':
@@ -444,78 +468,10 @@ def register_routes(app):
             last_error = None
             chat_response = None
             successful_account_idx = None
-            
-            # 优先使用前端传递的 conversation_id 和 is_new_conversation
-            conversation_id = data.get('conversation_id')
-            is_new_conversation = data.get('is_new_conversation', False)
-            
+
             # 检测是否有图片输入
             has_images = bool(input_images or input_file_ids or gemini_file_ids)
-            
-            # 如果前端没有传递 conversation_id，则根据消息内容自动生成
-            # 注意：对于其他客户端（如 Cursor、Cherry Studio），如果没有传递 conversation_id，
-            # 我们使用第一条用户消息内容生成稳定的 ID，确保同一对话的后续请求使用相同的 ID
-            content = ""  # 初始化 content 变量，用于后续检查
-            if not conversation_id and messages:
-                user_count = sum(1 for msg in messages if msg.get('role') == 'user')
-                assistant_count = sum(1 for msg in messages if msg.get('role') == 'assistant')
-                system_count = sum(1 for msg in messages if msg.get('role') == 'system')
-                total_count = len(messages)
-                last_is_user = messages and messages[-1].get('role') == 'user'
-                first_user_msg = next((msg for msg in messages if msg.get('role') == 'user'), None)
-                
-                # 判断是否为新对话：只有第一条用户消息且没有 assistant 回复才是新对话
-                # 如果有多条消息或已有 assistant 回复，说明是继续对话
-                is_new_conversation = (user_count == 1 and assistant_count == 0 and total_count == 1)
-                
-                if first_user_msg:
-                    # 按照 Gemini-Link-System 的逻辑：只使用第一条消息的文本部分生成会话键
-                    # 完全忽略图片，因为图片上传到 session 后会持久化，不需要参与会话键计算
-                    raw_content = first_user_msg.get('content', '')
-                    content = ""
-                    
-                    # 如果内容是数组（包含文件等），只提取文本部分，完全忽略图片
-                    if isinstance(raw_content, list):
-                        text_parts = []
-                        for item in raw_content:
-                            if isinstance(item, dict) and item.get('type') == 'text':
-                                text_parts.append(str(item.get('text', '')))
-                        # 只使用文本部分，忽略所有图片/文件
-                        content = '|'.join(text_parts) if text_parts else ""
-                    else:
-                        # 如果是字符串，需要移除 base64 图片数据
-                        content_str = str(raw_content)
-                        # 移除 base64 图片数据 URL
-                        base64_pattern = r'data:image/[^;]+;base64,[A-Za-z0-9+/=\s]+'
-                        text_only = re.sub(base64_pattern, '', content_str, flags=re.MULTILINE)
-                        # 清理多余的空白字符
-                        content = re.sub(r'\s+', ' ', text_only).strip()
-                    
-                    # 如果内容为空，使用 "empty"（类似 Gemini-Link-System）
-                    if not content:
-                        content = "empty"
-                    
-                    # 生成 conversation_id（使用 MD5，类似 Gemini-Link-System）
-                    generated_id = hashlib.md5(content.encode('utf-8')).hexdigest()[:16]
-                    conversation_id = generated_id
-                    
-                    # 打印 conversation_id 生成内容（用于调试）
-                    print(f"[检测] 🔍 conversation_id 生成内容: {content[:200]}... (长度: {len(content)}, has_images={has_images})")
-                    print(f"[检测] 🔍 conversation_id MD5 结果: {conversation_id}")
-                
-                if is_new_conversation:
-                    print(f"[聊天] 检测到新对话（user={user_count}, assistant={assistant_count}, system={system_count}, total={total_count}），对话ID: {conversation_id}，将创建新的 session")
-                    if has_images:
-                        print(f"[检测] ⚠️ 新对话包含图片输入（input_images={len(input_images)}, input_file_ids={len(input_file_ids)}, gemini_file_ids={len(gemini_file_ids)}）")
-                elif conversation_id:
-                    print(f"[聊天] 继续对话，对话ID: {conversation_id}")
-                    if has_images:
-                        print(f"[检测] ℹ️ 继续对话包含图片输入（input_images={len(input_images)}, input_file_ids={len(input_file_ids)}, gemini_file_ids={len(gemini_file_ids)}）")
-            elif conversation_id:
-                print(f"[聊天] 使用前端传递的对话ID: {conversation_id}, 新对话: {is_new_conversation}")
-                if has_images:
-                    print(f"[检测] ℹ️ 前端传递的对话包含图片输入（input_images={len(input_images)}, input_file_ids={len(input_file_ids)}, gemini_file_ids={len(gemini_file_ids)}），is_new_conversation={is_new_conversation}")
-            
+
             preferred_account_idx = None
             if selected_model_config and "account_index" in selected_model_config:
                 preferred_account_idx = selected_model_config.get("account_index")
@@ -553,41 +509,7 @@ def register_routes(app):
                     else:
                         # 根据请求类型选择对应配额类型可用的账号
                         account_idx, account = account_manager.get_next_account(required_quota_type)
-                    
-                    # ⚠️ 特殊处理：如果当前请求是新对话且有文本（不是 "empty"），
-                    # 检查是否有 "empty" 会话键的 session（可能是之前只有图片的请求创建的）
-                    # 如果有，复用该 session，确保图片在同一个 session 中可见
-                    should_check_empty_session = (
-                        is_new_conversation and  # 是新对话
-                        account_idx is not None and  # 已选择账号
-                        not data.get('conversation_id') and  # 客户端没有传递 conversation_id
-                        content and  # 有文本内容
-                        content != "empty"  # 不是 "empty"
-                    )
-                    
-                    if should_check_empty_session:
-                        # 计算 "empty" 的 conversation_id
-                        empty_id = hashlib.md5("empty".encode('utf-8')).hexdigest()[:16]
-                        with account_manager.lock:
-                            if account_idx in account_manager.conversation_sessions:
-                                if empty_id in account_manager.conversation_sessions[account_idx]:
-                                    existing_session = account_manager.conversation_sessions[account_idx][empty_id]
-                                    print(f"[检测] 🔍 找到已存在的'只有图片'的 session: {existing_session} (conversation_id={empty_id})")
-                                    print(f"[检测] 🔍 将使用该 session 而不是创建新的 (原 conversation_id={conversation_id})")
-                                    # 使用已存在的 session 的 conversation_id
-                                    conversation_id = empty_id
-                                    is_new_conversation = False  # 不是新对话，是继续对话
-                    
-                    # 按照 Gemini-Link-System 的逻辑：
-                    # 图片上传到 session 后会持久化，不需要特殊处理
-                    # 如果找到缓存的 session，直接复用，图片已经在 session 中了
-                    
-                    # 调试：检测图片输入时的会话创建
-                    if has_images and is_new_conversation:
-                        print(f"[检测] ⚠️ 图片输入 + 新对话：force_new=True, conversation_id={conversation_id}")
-                    elif has_images and not is_new_conversation:
-                        print(f"[检测] ℹ️ 图片输入 + 继续对话：force_new=False, conversation_id={conversation_id}")
-                    
+
                     # ⚠️ 重要：如果使用了 file_id，且文件关联了 session，应该使用该 session
                     # 而不是创建新的 session，否则文件在旧 session 中，聊天在新 session 中，会看不到文件
                     use_file_session = None
@@ -598,7 +520,7 @@ def register_routes(app):
                         if len(set(file_sessions)) > 1:
                             print(f"[警告] ⚠️ 多个文件关联了不同的 session: {set(file_sessions)}，将使用第一个: {use_file_session}")
                         print(f"[检测] 📎 检测到文件关联的 session: {use_file_session}，将使用该 session 进行聊天")
-                    
+
                     if use_file_session:
                         # 使用文件关联的 session，而不是创建新的
                         jwt = ensure_jwt_for_account(account_idx, account)
@@ -606,8 +528,8 @@ def register_routes(app):
                         team_id = account.get("team_id")
                         print(f"[检测] ✓ 使用文件关联的 session: {session}（跳过会话创建）")
                     else:
-                        # 正常创建或复用 session
-                        session, jwt, team_id = ensure_session_for_account(account_idx, account, force_new=is_new_conversation, conversation_id=conversation_id)
+                        # 正常创建或复用 session（简化规则：超过 50 次或 12 小时更新）
+                        session, jwt, team_id = ensure_session_for_account(account_idx, account)
                     from .utils import get_proxy
                     proxy = get_proxy()
                     
@@ -734,8 +656,8 @@ def register_routes(app):
                                 state = account_manager.account_states.get(account_idx)
                                 if state and state.get("session"):
                                     state["session"] = None
-                                if account_idx in account_manager.conversation_sessions:
-                                    account_manager.conversation_sessions[account_idx] = {}
+                                    state["session_count"] = 0
+                                    state["session_created_time"] = 0
                         try_without_model_id = True
                     else:
                         cooldown_time = account_manager.generic_error_cooldown

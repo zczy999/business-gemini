@@ -22,8 +22,7 @@ class AccountManager:
         self.config = None
         self.accounts = []  # 账号列表
         self.current_index = 0  # 当前轮训索引
-        self.account_states = {}  # 账号状态: {index: {jwt, jwt_time, session, available, cooldown_until, cooldown_reason, quota_usage, quota_reset_date}}
-        self.conversation_sessions = {}  # 对话 session 映射: {account_idx: {conversation_id: session_name}}
+        self.account_states = {}  # 账号状态: {index: {jwt, jwt_time, session, session_count, session_created_time, available, cooldown_until, cooldown_reason, quota_usage, quota_reset_date}}
         self.lock = threading.Lock()
         self.auth_error_cooldown = AUTH_ERROR_COOLDOWN_SECONDS
         self.rate_limit_cooldown = RATE_LIMIT_COOLDOWN_SECONDS
@@ -180,6 +179,8 @@ class AccountManager:
                             "jwt": None,
                             "jwt_time": 0,
                             "session": None,
+                            "session_count": 0,  # session 使用次数
+                            "session_created_time": 0,  # session 创建时间戳
                             "available": available,
                             "cooldown_until": acc.get("cooldown_until"),
                             "cooldown_reason": acc.get("unavailable_reason") or acc.get("cooldown_reason") or "",
@@ -232,6 +233,8 @@ class AccountManager:
                             "jwt": None,
                             "jwt_time": 0,
                             "session": None,
+                            "session_count": 0,  # session 使用次数
+                            "session_created_time": 0,  # session 创建时间戳
                             "available": available,
                             "cooldown_until": acc.get("cooldown_until"),
                             "cooldown_reason": acc.get("unavailable_reason") or acc.get("cooldown_reason") or "",
