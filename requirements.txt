@@ -12,8 +12,7 @@ requests>=2.25.0
 urllib3>=1.26.0
 
 # Browser Automation (for automatic Cookie refresh)
-# 需要 >= 1.20.0 才支持 headless="new"，建议使用 >= 1.49.0 以获得最佳支持
-playwright>=1.49.0
+playwright>=1.40.0
 
 # Timezone data (required for zoneinfo on Windows)
 tzdata>=2024.1

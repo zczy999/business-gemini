@@ -1683,7 +1683,7 @@ def main():
     print("自动获取邮箱和验证码登录 Gemini Business")
     print("="*60)
     if use_headless:
-        print("[模式] 无头模式（headless=\"new\"，更难被检测）")
+        print("[模式] 无头模式（headless=True）")
     else:
         print("[模式] 可视化模式（headless=False）")
     print()
@@ -1694,7 +1694,7 @@ def main():
         if os.name != 'nt':  # 非 Windows 系统
             launch_args = ['--no-sandbox', '--disable-setuid-sandbox']
         
-        # 添加反检测参数，降低被 reCAPTCHA 识别的风险（增强版）
+        # 添加反检测参数，降低被 reCAPTCHA 识别的风险
         launch_args.extend([
             '--disable-blink-features=AutomationControlled',  # 禁用自动化控制特征
             '--disable-dev-shm-usage',  # 避免共享内存问题
@@ -1703,408 +1703,109 @@ def main():
             '--disable-infobars',  # 禁用信息栏
             '--disable-web-security',  # 禁用 Web 安全（谨慎使用）
             '--disable-features=IsolateOrigins,site-per-process',  # 禁用某些安全特性
-            '--window-size=1920,1080',  # 设置窗口大小
-            '--start-maximized',  # 最大化窗口
-            '--disable-extensions',  # 禁用扩展
-            '--disable-gpu',  # 禁用 GPU（无头模式下）
-            '--disable-software-rasterizer',  # 禁用软件光栅化
-            # 增强反检测参数
-            '--disable-background-timer-throttling',  # 禁用后台定时器节流
-            '--disable-backgrounding-occluded-windows',  # 禁用被遮挡窗口的后台处理
-            '--disable-renderer-backgrounding',  # 禁用渲染器后台处理
-            '--disable-features=TranslateUI',  # 禁用翻译UI
-            '--disable-ipc-flooding-protection',  # 禁用IPC洪水保护
-            '--enable-features=NetworkService,NetworkServiceInProcess',  # 启用网络服务
-            '--force-color-profile=srgb',  # 强制颜色配置文件
-            '--metrics-recording-only',  # 仅记录指标
-            '--use-mock-keychain',  # 使用模拟密钥链（Mac）
-            '--disable-component-extensions-with-background-pages',  # 禁用后台页面扩展
         ])
         
-        # 使用新的无头模式（通过启动参数 --headless=new）更难被检测
-        # Python Playwright 的 headless 参数只支持布尔值，但可以通过启动参数启用新无头模式
-        if use_headless:
-            # 添加 --headless=new 参数以启用新的无头模式（更难被检测）
-            launch_args.append('--headless=new')
-            browser = p.chromium.launch(headless=True, args=launch_args)
-        else:
-            # 有头模式
-            browser = p.chromium.launch(headless=False, args=launch_args)
+        browser = p.chromium.launch(headless=use_headless, args=launch_args)
         
-        # 创建浏览器上下文，使用真实的用户代理和视口（增强版）
-        # 使用最新的 Chrome User-Agent
+        # 创建浏览器上下文，使用真实的用户代理和视口
         context = browser.new_context(
             viewport={"width": 1920, "height": 1080},
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             locale="zh-CN",
             timezone_id="Asia/Shanghai",
-            # 添加额外的反检测措施（增强版）
+            # 添加额外的反检测措施
             extra_http_headers={
-                "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-                "Accept-Encoding": "gzip, deflate, br, zstd",
-                "Sec-CH-UA": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
-                "Sec-CH-UA-Mobile": "?0",
-                "Sec-CH-UA-Platform": '"Windows"',
-                "Sec-Fetch-Dest": "document",
-                "Sec-Fetch-Mode": "navigate",
-                "Sec-Fetch-Site": "none",
-                "Sec-Fetch-User": "?1",
-                "Upgrade-Insecure-Requests": "1",
-                "Cache-Control": "max-age=0",
-            },
-            # 添加更多真实浏览器特征
-            color_scheme="light",
-            reduced_motion="no-preference",
-            forced_colors="none",
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            }
         )
         
-        # 注入脚本以隐藏自动化特征（超级增强版，更强力绕过 reCAPTCHA）
+        # 注入脚本以隐藏自动化特征（增强版，更好地绕过 reCAPTCHA）
         context.add_init_script("""
-            (function() {
-                // 1. 完全移除 webdriver 特征（必须在最前面执行）
-                try {
-                    Object.defineProperty(navigator, 'webdriver', {
-                        get: () => undefined,
-                        configurable: true,
-                        enumerable: false
-                    });
-                } catch(e) {}
-                
-                try {
-                    delete navigator.__proto__.webdriver;
-                } catch(e) {}
-                
-                try {
-                    delete navigator.webdriver;
-                } catch(e) {}
-                
-                // 覆盖 Object.getOwnPropertyDescriptor（必须在定义后立即覆盖）
-                const originalGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
-                Object.getOwnPropertyDescriptor = function(obj, prop) {
-                    if (obj === navigator && prop === 'webdriver') {
-                        return undefined;
-                    }
-                    return originalGetOwnPropertyDescriptor.apply(this, arguments);
-                };
-                
-                // 覆盖 Object.getOwnPropertyNames（防止枚举 webdriver）
-                const originalGetOwnPropertyNames = Object.getOwnPropertyNames;
-                Object.getOwnPropertyNames = function(obj) {
-                    const names = originalGetOwnPropertyNames.apply(this, arguments);
-                    if (obj === navigator) {
-                        return names.filter(name => name !== 'webdriver');
-                    }
-                    return names;
-                };
-                
-                // 覆盖 Object.keys（防止枚举 webdriver）
-                const originalKeys = Object.keys;
-                Object.keys = function(obj) {
-                    const keys = originalKeys.apply(this, arguments);
-                    if (obj === navigator) {
-                        return keys.filter(key => key !== 'webdriver');
-                    }
-                    return keys;
-                };
-                
-                // 2. 创建完整的 chrome 对象（模拟真实 Chrome）
-                window.chrome = {
-                    runtime: {
-                        onConnect: undefined,
-                        onMessage: undefined
-                    },
-                    loadTimes: function() {
-                        return {
-                            commitLoadTime: Date.now() / 1000 - Math.random() * 2,
-                            connectionInfo: 'http/1.1',
-                            finishDocumentLoadTime: Date.now() / 1000 - Math.random(),
-                            finishLoadTime: Date.now() / 1000 - Math.random() * 0.5,
-                            firstPaintAfterLoadTime: 0,
-                            firstPaintTime: Date.now() / 1000 - Math.random() * 1.5,
-                            navigationType: 'Other',
-                            npnNegotiatedProtocol: 'unknown',
-                            requestTime: Date.now() / 1000 - Math.random() * 3,
-                            startLoadTime: Date.now() / 1000 - Math.random() * 3.5,
-                            wasAlternateProtocolAvailable: false,
-                            wasFetchedViaSpdy: false,
-                            wasNpnNegotiated: false
-                        };
-                    },
-                    csi: function() {
-                        return {
-                            startE: Date.now(),
-                            onloadT: Date.now() + Math.random() * 100,
-                            pageT: Math.random() * 100,
-                            tran: 15
-                        };
-                    },
-                    app: {
-                        isInstalled: false,
-                        InstallState: {
-                            DISABLED: 'disabled',
-                            INSTALLED: 'installed',
-                            NOT_INSTALLED: 'not_installed'
-                        },
-                        RunningState: {
-                            CANNOT_RUN: 'cannot_run',
-                            READY_TO_RUN: 'ready_to_run',
-                            RUNNING: 'running'
-                        }
-                    }
-                };
-                
-                // 3. 覆盖 permissions API
-                const originalQuery = window.navigator.permissions.query;
-                window.navigator.permissions.query = (parameters) => {
-                    if (parameters.name === 'notifications') {
-                        return Promise.resolve({ state: Notification.permission });
-                    }
-                    return originalQuery ? originalQuery(parameters) : Promise.resolve({ state: 'granted' });
-                };
-                
-                // 4. 创建真实的 plugins 数组
-                Object.defineProperty(navigator, 'plugins', {
-                    get: () => {
-                        const plugins = [];
-                        for (let i = 0; i < 5; i++) {
-                            plugins.push({
-                                name: `Plugin ${i}`,
-                                description: `Plugin ${i} Description`,
-                                filename: `plugin${i}.dll`,
-                                length: 1
-                            });
-                        }
-                        return plugins;
-                    },
-                    configurable: true
+            // 覆盖 navigator.webdriver
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            });
+            
+            // 覆盖 chrome 对象
+            window.chrome = {
+                runtime: {},
+                loadTimes: function() {},
+                csi: function() {},
+                app: {}
+            };
+            
+            // 覆盖 permissions
+            const originalQuery = window.navigator.permissions.query;
+            window.navigator.permissions.query = (parameters) => (
+                parameters.name === 'notifications' ?
+                    Promise.resolve({ state: Notification.permission }) :
+                    originalQuery(parameters)
+            );
+            
+            // 覆盖 plugins
+            Object.defineProperty(navigator, 'plugins', {
+                get: () => [1, 2, 3, 4, 5]
+            });
+            
+            // 覆盖 languages
+            Object.defineProperty(navigator, 'languages', {
+                get: () => ['zh-CN', 'zh', 'en']
+            });
+            
+            // 覆盖 webdriver 相关属性
+            delete navigator.__proto__.webdriver;
+            
+            // 覆盖 getBattery
+            if (navigator.getBattery) {
+                navigator.getBattery = () => Promise.resolve({
+                    charging: true,
+                    chargingTime: 0,
+                    dischargingTime: Infinity,
+                    level: 1
                 });
-                
-                // 5. 覆盖 languages
-                Object.defineProperty(navigator, 'languages', {
-                    get: () => ['zh-CN', 'zh', 'en-US', 'en'],
-                    configurable: true
-                });
-                
-                // 6. 覆盖 getBattery
-                if (navigator.getBattery) {
-                    navigator.getBattery = () => Promise.resolve({
-                        charging: true,
-                        chargingTime: 0,
-                        dischargingTime: Infinity,
-                        level: 0.95 + Math.random() * 0.05
-                    });
-                }
-                
-                // 7. 覆盖 connection
-                Object.defineProperty(navigator, 'connection', {
-                    get: () => ({
-                        effectiveType: '4g',
-                        rtt: 50 + Math.random() * 50,
-                        downlink: 10 + Math.random() * 5,
-                        saveData: false,
-                        onchange: null
-                    }),
-                    configurable: true
-                });
-                
-                // 8. 覆盖硬件信息
-                Object.defineProperty(navigator, 'hardwareConcurrency', {
-                    get: () => 8,
-                    configurable: true
-                });
-                
-                Object.defineProperty(navigator, 'deviceMemory', {
-                    get: () => 8,
-                    configurable: true
-                });
-                
-                // 9. 覆盖 platform
-                Object.defineProperty(navigator, 'platform', {
-                    get: () => 'Win32',
-                    configurable: true
-                });
-                
-                // 10. 增强 Canvas 指纹保护
-                const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
-                const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
-                
-                HTMLCanvasElement.prototype.toDataURL = function(type) {
-                    const context = this.getContext('2d');
-                    if (context) {
-                        const imageData = context.getImageData(0, 0, this.width, this.height);
-                        // 添加微小的随机噪声（人眼不可见）
-                        for (let i = 0; i < imageData.data.length; i += 4) {
-                            if (Math.random() < 0.01) {
-                                imageData.data[i] = Math.min(255, imageData.data[i] + Math.random() * 2 - 1);
-                            }
-                        }
-                        context.putImageData(imageData, 0, 0);
-                    }
+            }
+            
+            // 覆盖 connection
+            Object.defineProperty(navigator, 'connection', {
+                get: () => ({
+                    effectiveType: '4g',
+                    rtt: 50,
+                    downlink: 10,
+                    saveData: false
+                })
+            });
+            
+            // 覆盖 hardwareConcurrency
+            Object.defineProperty(navigator, 'hardwareConcurrency', {
+                get: () => 8
+            });
+            
+            // 覆盖 deviceMemory
+            Object.defineProperty(navigator, 'deviceMemory', {
+                get: () => 8
+            });
+            
+            // 覆盖 canvas 指纹
+            const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+            HTMLCanvasElement.prototype.toDataURL = function(type) {
+                if (type === 'image/png') {
                     return originalToDataURL.apply(this, arguments);
-                };
-                
-                // 11. 增强 WebGL 指纹保护
-                const getParameter = WebGLRenderingContext.prototype.getParameter;
-                WebGLRenderingContext.prototype.getParameter = function(parameter) {
-                    if (parameter === 37445) {
-                        return 'Intel Inc.';
-                    }
-                    if (parameter === 37446) {
-                        return 'Intel Iris OpenGL Engine';
-                    }
-                    if (parameter === 7936) {
-                        return 'WebGL 2.0';
-                    }
-                    if (parameter === 7937) {
-                        return 'WebGL GLSL ES 3.00';
-                    }
-                    return getParameter.apply(this, arguments);
-                };
-                
-                // 12. 覆盖 AudioContext（音频指纹保护）
-                if (window.AudioContext || window.webkitAudioContext) {
-                    const AudioContext = window.AudioContext || window.webkitAudioContext;
-                    const originalCreateOscillator = AudioContext.prototype.createOscillator;
-                    AudioContext.prototype.createOscillator = function() {
-                        const oscillator = originalCreateOscillator.apply(this, arguments);
-                        const originalFrequency = oscillator.frequency.value;
-                        Object.defineProperty(oscillator.frequency, 'value', {
-                            get: () => originalFrequency + (Math.random() * 0.0001 - 0.00005),
-                            set: function(v) { originalFrequency = v; }
-                        });
-                        return oscillator;
-                    };
                 }
-                
-                // 13. 添加鼠标和键盘事件监听器（模拟真实用户）
-                let mouseEvents = 0;
-                let keyboardEvents = 0;
-                
-                document.addEventListener('mousemove', () => { mouseEvents++; }, true);
-                document.addEventListener('click', () => { mouseEvents++; }, true);
-                document.addEventListener('keydown', () => { keyboardEvents++; }, true);
-                
-                // 14. 覆盖 toString 方法（防止检测）
-                const originalToString = Function.prototype.toString;
-                Function.prototype.toString = function() {
-                    if (this === navigator.getBattery || this === navigator.permissions.query) {
-                        return 'function ' + this.name + '() { [native code] }';
-                    }
-                    return originalToString.apply(this, arguments);
-                };
-                
-                // 15. 覆盖 Object.getOwnPropertyDescriptor（防止检测 webdriver）
-                const originalGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
-                Object.getOwnPropertyDescriptor = function(obj, prop) {
-                    if (obj === navigator && prop === 'webdriver') {
-                        return undefined;
-                    }
-                    return originalGetOwnPropertyDescriptor.apply(this, arguments);
-                };
-                
-                // 16. 添加真实的屏幕信息
-                Object.defineProperty(screen, 'availWidth', {
-                    get: () => 1920,
-                    configurable: true
-                });
-                Object.defineProperty(screen, 'availHeight', {
-                    get: () => 1040,
-                    configurable: true
-                });
-                Object.defineProperty(screen, 'width', {
-                    get: () => 1920,
-                    configurable: true
-                });
-                Object.defineProperty(screen, 'height', {
-                    get: () => 1080,
-                    configurable: true
-                });
-                Object.defineProperty(screen, 'colorDepth', {
-                    get: () => 24,
-                    configurable: true
-                });
-                Object.defineProperty(screen, 'pixelDepth', {
-                    get: () => 24,
-                    configurable: true
-                });
-                
-                // 17. 拦截 browserinfo API 调用（防止发送检测信息）
-                const originalFetch = window.fetch;
-                window.fetch = function(...args) {
-                    const url = args[0];
-                    if (typeof url === 'string' && url.includes('browserinfo')) {
-                        // 修改请求体，确保发送正确的屏幕尺寸
-                        if (args[1] && args[1].body) {
-                            try {
-                                const body = JSON.parse(args[1].body);
-                                if (body['f.req'] && Array.isArray(body['f.req'])) {
-                                    const reqData = JSON.parse(body['f.req'][0]);
-                                    // 确保屏幕尺寸正确：[高度, 宽度]
-                                    if (reqData[1] && Array.isArray(reqData[1])) {
-                                        reqData[1] = [null, 1080, 1920];
-                                    }
-                                    // 确保窗口尺寸正确
-                                    if (reqData[2] && Array.isArray(reqData[2])) {
-                                        reqData[2] = [null, window.innerHeight, window.innerWidth];
-                                    }
-                                    body['f.req'][0] = JSON.stringify(reqData);
-                                    args[1].body = JSON.stringify(body);
-                                }
-                            } catch(e) {
-                                // 如果解析失败，继续使用原始请求
-                            }
-                        }
-                    }
-                    return originalFetch.apply(this, args);
-                };
-                
-                // 18. 拦截 XMLHttpRequest（防止通过 XHR 发送检测信息）
-                const originalXHROpen = XMLHttpRequest.prototype.open;
-                const originalXHRSend = XMLHttpRequest.prototype.send;
-                
-                XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-                    this._url = url;
-                    return originalXHROpen.apply(this, [method, url, ...rest]);
-                };
-                
-                XMLHttpRequest.prototype.send = function(data) {
-                    if (this._url && this._url.includes('browserinfo') && data) {
-                        try {
-                            const body = JSON.parse(data);
-                            if (body['f.req'] && Array.isArray(body['f.req'])) {
-                                const reqData = JSON.parse(body['f.req'][0]);
-                                // 确保屏幕尺寸正确
-                                if (reqData[1] && Array.isArray(reqData[1])) {
-                                    reqData[1] = [null, 1080, 1920];
-                                }
-                                // 确保窗口尺寸正确
-                                if (reqData[2] && Array.isArray(reqData[2])) {
-                                    reqData[2] = [null, window.innerHeight, window.innerWidth];
-                                }
-                                body['f.req'][0] = JSON.stringify(reqData);
-                                data = JSON.stringify(body);
-                            }
-                        } catch(e) {
-                            // 如果解析失败，继续使用原始数据
-                        }
-                    }
-                    return originalXHRSend.apply(this, [data]);
-                };
-                
-                // 19. 持续监控并修复 webdriver 属性（防止被重新设置）
-                setInterval(() => {
-                    if (navigator.webdriver !== undefined) {
-                        try {
-                            Object.defineProperty(navigator, 'webdriver', {
-                                get: () => undefined,
-                                configurable: true,
-                                enumerable: false
-                            });
-                        } catch(e) {}
-                    }
-                }, 100);
-            })();
+                return originalToDataURL.apply(this, arguments);
+            };
+            
+            // 覆盖 WebGL 指纹
+            const getParameter = WebGLRenderingContext.prototype.getParameter;
+            WebGLRenderingContext.prototype.getParameter = function(parameter) {
+                if (parameter === 37445) {
+                    return 'Intel Inc.';
+                }
+                if (parameter === 37446) {
+                    return 'Intel Iris OpenGL Engine';
+                }
+                return getParameter.apply(this, arguments);
+            };
         """)
         
         # 创建两个标签页：一个用于临时邮箱，一个用于登录
@@ -2516,7 +2217,7 @@ def _refresh_single_account_internal(account_idx: int, account: dict, headless: 
             if os.name != 'nt':  # 非 Windows 系统
                 launch_args = ['--no-sandbox', '--disable-setuid-sandbox']
             
-            # 添加反检测参数，降低被 reCAPTCHA 识别的风险（增强版）
+            # 添加反检测参数，降低被 reCAPTCHA 识别的风险
             launch_args.extend([
                 '--disable-blink-features=AutomationControlled',  # 禁用自动化控制特征
                 '--disable-dev-shm-usage',  # 避免共享内存问题
@@ -2525,403 +2226,111 @@ def _refresh_single_account_internal(account_idx: int, account: dict, headless: 
                 '--disable-infobars',  # 禁用信息栏
                 '--disable-web-security',  # 禁用 Web 安全（谨慎使用）
                 '--disable-features=IsolateOrigins,site-per-process',  # 禁用某些安全特性
-                '--window-size=1920,1080',  # 设置窗口大小
-                '--start-maximized',  # 最大化窗口
-                '--disable-extensions',  # 禁用扩展
-                '--disable-gpu',  # 禁用 GPU（无头模式下）
-                '--disable-software-rasterizer',  # 禁用软件光栅化
-                # 增强反检测参数
-                '--disable-background-timer-throttling',  # 禁用后台定时器节流
-                '--disable-backgrounding-occluded-windows',  # 禁用被遮挡窗口的后台处理
-                '--disable-renderer-backgrounding',  # 禁用渲染器后台处理
-                '--disable-features=TranslateUI',  # 禁用翻译UI
-                '--disable-ipc-flooding-protection',  # 禁用IPC洪水保护
-                '--enable-features=NetworkService,NetworkServiceInProcess',  # 启用网络服务
-                '--force-color-profile=srgb',  # 强制颜色配置文件
-                '--metrics-recording-only',  # 仅记录指标
-                '--use-mock-keychain',  # 使用模拟密钥链（Mac）
-                '--disable-component-extensions-with-background-pages',  # 禁用后台页面扩展
             ])
             
-            # 使用新的无头模式（通过启动参数 --headless=new）更难被检测
-            # Python Playwright 的 headless 参数只支持布尔值，但可以通过启动参数启用新无头模式
-            if headless:
-                # 添加 --headless=new 参数以启用新的无头模式（更难被检测）
-                launch_args.append('--headless=new')
-                browser = p.chromium.launch(headless=True, args=launch_args)
-            else:
-                # 有头模式
-                browser = p.chromium.launch(headless=False, args=launch_args)
+            browser = p.chromium.launch(headless=headless, args=launch_args)
             print(f"[登录] ✓ 浏览器已启动")
             
-            # 创建浏览器上下文，使用真实的用户代理和视口（增强版）
+            # 创建浏览器上下文，使用真实的用户代理和视口
             print(f"[登录] 正在创建浏览器上下文...")
-            # 使用最新的 Chrome User-Agent
             context = browser.new_context(
                 viewport={"width": 1920, "height": 1080},
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 locale="zh-CN",
                 timezone_id="Asia/Shanghai",
-                # 添加额外的反检测措施（增强版）
+                # 添加额外的反检测措施
                 extra_http_headers={
-                    "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-                    "Accept-Encoding": "gzip, deflate, br, zstd",
-                    "Sec-CH-UA": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
-                    "Sec-CH-UA-Mobile": "?0",
-                    "Sec-CH-UA-Platform": '"Windows"',
-                    "Sec-Fetch-Dest": "document",
-                    "Sec-Fetch-Mode": "navigate",
-                    "Sec-Fetch-Site": "none",
-                    "Sec-Fetch-User": "?1",
-                    "Upgrade-Insecure-Requests": "1",
-                    "Cache-Control": "max-age=0",
-                },
-                # 添加更多真实浏览器特征
-                color_scheme="light",
-                reduced_motion="no-preference",
-                forced_colors="none",
+                    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                }
             )
             
-            # 注入脚本以隐藏自动化特征（超级增强版，更强力绕过 reCAPTCHA）
+            # 注入脚本以隐藏自动化特征（增强版，更好地绕过 reCAPTCHA）
             context.add_init_script("""
-                (function() {
-                    // 1. 完全移除 webdriver 特征（必须在最前面执行）
-                    try {
-                        Object.defineProperty(navigator, 'webdriver', {
-                            get: () => undefined,
-                            configurable: true,
-                            enumerable: false
-                        });
-                    } catch(e) {}
-                    
-                    try {
-                        delete navigator.__proto__.webdriver;
-                    } catch(e) {}
-                    
-                    try {
-                        delete navigator.webdriver;
-                    } catch(e) {}
-                    
-                    // 覆盖 Object.getOwnPropertyDescriptor（必须在定义后立即覆盖）
-                    const originalGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
-                    Object.getOwnPropertyDescriptor = function(obj, prop) {
-                        if (obj === navigator && prop === 'webdriver') {
-                            return undefined;
-                        }
-                        return originalGetOwnPropertyDescriptor.apply(this, arguments);
-                    };
-                    
-                    // 覆盖 Object.getOwnPropertyNames（防止枚举 webdriver）
-                    const originalGetOwnPropertyNames = Object.getOwnPropertyNames;
-                    Object.getOwnPropertyNames = function(obj) {
-                        const names = originalGetOwnPropertyNames.apply(this, arguments);
-                        if (obj === navigator) {
-                            return names.filter(name => name !== 'webdriver');
-                        }
-                        return names;
-                    };
-                    
-                    // 覆盖 Object.keys（防止枚举 webdriver）
-                    const originalKeys = Object.keys;
-                    Object.keys = function(obj) {
-                        const keys = originalKeys.apply(this, arguments);
-                        if (obj === navigator) {
-                            return keys.filter(key => key !== 'webdriver');
-                        }
-                        return keys;
-                    };
-                    
-                    // 2. 创建完整的 chrome 对象（模拟真实 Chrome）
-                    window.chrome = {
-                        runtime: {
-                            onConnect: undefined,
-                            onMessage: undefined
-                        },
-                        loadTimes: function() {
-                            return {
-                                commitLoadTime: Date.now() / 1000 - Math.random() * 2,
-                                connectionInfo: 'http/1.1',
-                                finishDocumentLoadTime: Date.now() / 1000 - Math.random(),
-                                finishLoadTime: Date.now() / 1000 - Math.random() * 0.5,
-                                firstPaintAfterLoadTime: 0,
-                                firstPaintTime: Date.now() / 1000 - Math.random() * 1.5,
-                                navigationType: 'Other',
-                                npnNegotiatedProtocol: 'unknown',
-                                requestTime: Date.now() / 1000 - Math.random() * 3,
-                                startLoadTime: Date.now() / 1000 - Math.random() * 3.5,
-                                wasAlternateProtocolAvailable: false,
-                                wasFetchedViaSpdy: false,
-                                wasNpnNegotiated: false
-                            };
-                        },
-                        csi: function() {
-                            return {
-                                startE: Date.now(),
-                                onloadT: Date.now() + Math.random() * 100,
-                                pageT: Math.random() * 100,
-                                tran: 15
-                            };
-                        },
-                        app: {
-                            isInstalled: false,
-                            InstallState: {
-                                DISABLED: 'disabled',
-                                INSTALLED: 'installed',
-                                NOT_INSTALLED: 'not_installed'
-                            },
-                            RunningState: {
-                                CANNOT_RUN: 'cannot_run',
-                                READY_TO_RUN: 'ready_to_run',
-                                RUNNING: 'running'
-                            }
-                        }
-                    };
-                    
-                    // 3. 覆盖 permissions API
-                    const originalQuery = window.navigator.permissions.query;
-                    window.navigator.permissions.query = (parameters) => {
-                        if (parameters.name === 'notifications') {
-                            return Promise.resolve({ state: Notification.permission });
-                        }
-                        return originalQuery ? originalQuery(parameters) : Promise.resolve({ state: 'granted' });
-                    };
-                    
-                    // 4. 创建真实的 plugins 数组
-                    Object.defineProperty(navigator, 'plugins', {
-                        get: () => {
-                            const plugins = [];
-                            for (let i = 0; i < 5; i++) {
-                                plugins.push({
-                                    name: `Plugin ${i}`,
-                                    description: `Plugin ${i} Description`,
-                                    filename: `plugin${i}.dll`,
-                                    length: 1
-                                });
-                            }
-                            return plugins;
-                        },
-                        configurable: true
+                // 覆盖 navigator.webdriver
+                Object.defineProperty(navigator, 'webdriver', {
+                    get: () => undefined
+                });
+                
+                // 覆盖 chrome 对象
+                window.chrome = {
+                    runtime: {},
+                    loadTimes: function() {},
+                    csi: function() {},
+                    app: {}
+                };
+                
+                // 覆盖 permissions
+                const originalQuery = window.navigator.permissions.query;
+                window.navigator.permissions.query = (parameters) => (
+                    parameters.name === 'notifications' ?
+                        Promise.resolve({ state: Notification.permission }) :
+                        originalQuery(parameters)
+                );
+                
+                // 覆盖 plugins
+                Object.defineProperty(navigator, 'plugins', {
+                    get: () => [1, 2, 3, 4, 5]
+                });
+                
+                // 覆盖 languages
+                Object.defineProperty(navigator, 'languages', {
+                    get: () => ['zh-CN', 'zh', 'en']
+                });
+                
+                // 覆盖 webdriver 相关属性
+                delete navigator.__proto__.webdriver;
+                
+                // 覆盖 getBattery
+                if (navigator.getBattery) {
+                    navigator.getBattery = () => Promise.resolve({
+                        charging: true,
+                        chargingTime: 0,
+                        dischargingTime: Infinity,
+                        level: 1
                     });
-                    
-                    // 5. 覆盖 languages
-                    Object.defineProperty(navigator, 'languages', {
-                        get: () => ['zh-CN', 'zh', 'en-US', 'en'],
-                        configurable: true
-                    });
-                    
-                    // 6. 覆盖 getBattery
-                    if (navigator.getBattery) {
-                        navigator.getBattery = () => Promise.resolve({
-                            charging: true,
-                            chargingTime: 0,
-                            dischargingTime: Infinity,
-                            level: 0.95 + Math.random() * 0.05
-                        });
-                    }
-                    
-                    // 7. 覆盖 connection
-                    Object.defineProperty(navigator, 'connection', {
-                        get: () => ({
-                            effectiveType: '4g',
-                            rtt: 50 + Math.random() * 50,
-                            downlink: 10 + Math.random() * 5,
-                            saveData: false,
-                            onchange: null
-                        }),
-                        configurable: true
-                    });
-                    
-                    // 8. 覆盖硬件信息
-                    Object.defineProperty(navigator, 'hardwareConcurrency', {
-                        get: () => 8,
-                        configurable: true
-                    });
-                    
-                    Object.defineProperty(navigator, 'deviceMemory', {
-                        get: () => 8,
-                        configurable: true
-                    });
-                    
-                    // 9. 覆盖 platform
-                    Object.defineProperty(navigator, 'platform', {
-                        get: () => 'Win32',
-                        configurable: true
-                    });
-                    
-                    // 10. 增强 Canvas 指纹保护
-                    const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
-                    const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
-                    
-                    HTMLCanvasElement.prototype.toDataURL = function(type) {
-                        const context = this.getContext('2d');
-                        if (context) {
-                            const imageData = context.getImageData(0, 0, this.width, this.height);
-                            // 添加微小的随机噪声（人眼不可见）
-                            for (let i = 0; i < imageData.data.length; i += 4) {
-                                if (Math.random() < 0.01) {
-                                    imageData.data[i] = Math.min(255, imageData.data[i] + Math.random() * 2 - 1);
-                                }
-                            }
-                            context.putImageData(imageData, 0, 0);
-                        }
+                }
+                
+                // 覆盖 connection
+                Object.defineProperty(navigator, 'connection', {
+                    get: () => ({
+                        effectiveType: '4g',
+                        rtt: 50,
+                        downlink: 10,
+                        saveData: false
+                    })
+                });
+                
+                // 覆盖 hardwareConcurrency
+                Object.defineProperty(navigator, 'hardwareConcurrency', {
+                    get: () => 8
+                });
+                
+                // 覆盖 deviceMemory
+                Object.defineProperty(navigator, 'deviceMemory', {
+                    get: () => 8
+                });
+                
+                // 覆盖 canvas 指纹
+                const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+                HTMLCanvasElement.prototype.toDataURL = function(type) {
+                    if (type === 'image/png') {
                         return originalToDataURL.apply(this, arguments);
-                    };
-                    
-                    // 11. 增强 WebGL 指纹保护
-                    const getParameter = WebGLRenderingContext.prototype.getParameter;
-                    WebGLRenderingContext.prototype.getParameter = function(parameter) {
-                        if (parameter === 37445) {
-                            return 'Intel Inc.';
-                        }
-                        if (parameter === 37446) {
-                            return 'Intel Iris OpenGL Engine';
-                        }
-                        if (parameter === 7936) {
-                            return 'WebGL 2.0';
-                        }
-                        if (parameter === 7937) {
-                            return 'WebGL GLSL ES 3.00';
-                        }
-                        return getParameter.apply(this, arguments);
-                    };
-                    
-                    // 12. 覆盖 AudioContext（音频指纹保护）
-                    if (window.AudioContext || window.webkitAudioContext) {
-                        const AudioContext = window.AudioContext || window.webkitAudioContext;
-                        const originalCreateOscillator = AudioContext.prototype.createOscillator;
-                        AudioContext.prototype.createOscillator = function() {
-                            const oscillator = originalCreateOscillator.apply(this, arguments);
-                            const originalFrequency = oscillator.frequency.value;
-                            Object.defineProperty(oscillator.frequency, 'value', {
-                                get: () => originalFrequency + (Math.random() * 0.0001 - 0.00005),
-                                set: function(v) { originalFrequency = v; }
-                            });
-                            return oscillator;
-                        };
                     }
-                    
-                    // 13. 添加鼠标和键盘事件监听器（模拟真实用户）
-                    let mouseEvents = 0;
-                    let keyboardEvents = 0;
-                    
-                    document.addEventListener('mousemove', () => { mouseEvents++; }, true);
-                    document.addEventListener('click', () => { mouseEvents++; }, true);
-                    document.addEventListener('keydown', () => { keyboardEvents++; }, true);
-                    
-                    // 14. 覆盖 toString 方法（防止检测）
-                    const originalToString = Function.prototype.toString;
-                    Function.prototype.toString = function() {
-                        if (this === navigator.getBattery || this === navigator.permissions.query) {
-                            return 'function ' + this.name + '() { [native code] }';
-                        }
-                        return originalToString.apply(this, arguments);
-                    };
-                    
-                    // 15. 覆盖 Object.getOwnPropertyDescriptor（防止检测 webdriver）- 已在前面定义，这里移除重复
-                    
-                    // 16. 添加真实的屏幕信息
-                    Object.defineProperty(screen, 'availWidth', {
-                        get: () => 1920,
-                        configurable: true
-                    });
-                    Object.defineProperty(screen, 'availHeight', {
-                        get: () => 1040,
-                        configurable: true
-                    });
-                    Object.defineProperty(screen, 'width', {
-                        get: () => 1920,
-                        configurable: true
-                    });
-                    Object.defineProperty(screen, 'height', {
-                        get: () => 1080,
-                        configurable: true
-                    });
-                    Object.defineProperty(screen, 'colorDepth', {
-                        get: () => 24,
-                        configurable: true
-                    });
-                    Object.defineProperty(screen, 'pixelDepth', {
-                        get: () => 24,
-                        configurable: true
-                    });
-                    
-                    // 17. 拦截 browserinfo API 调用（防止发送检测信息）
-                    const originalFetch = window.fetch;
-                    window.fetch = function(...args) {
-                        const url = args[0];
-                        if (typeof url === 'string' && url.includes('browserinfo')) {
-                            // 修改请求体，确保发送正确的屏幕尺寸
-                            if (args[1] && args[1].body) {
-                                try {
-                                    const body = JSON.parse(args[1].body);
-                                    if (body['f.req'] && Array.isArray(body['f.req'])) {
-                                        const reqData = JSON.parse(body['f.req'][0]);
-                                        // 确保屏幕尺寸正确：[高度, 宽度]
-                                        if (reqData[1] && Array.isArray(reqData[1])) {
-                                            reqData[1] = [null, 1080, 1920];
-                                        }
-                                        // 确保窗口尺寸正确
-                                        if (reqData[2] && Array.isArray(reqData[2])) {
-                                            reqData[2] = [null, window.innerHeight, window.innerWidth];
-                                        }
-                                        body['f.req'][0] = JSON.stringify(reqData);
-                                        args[1].body = JSON.stringify(body);
-                                    }
-                                } catch(e) {
-                                    // 如果解析失败，继续使用原始请求
-                                }
-                            }
-                        }
-                        return originalFetch.apply(this, args);
-                    };
-                    
-                    // 18. 拦截 XMLHttpRequest（防止通过 XHR 发送检测信息）
-                    const originalXHROpen = XMLHttpRequest.prototype.open;
-                    const originalXHRSend = XMLHttpRequest.prototype.send;
-                    
-                    XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-                        this._url = url;
-                        return originalXHROpen.apply(this, [method, url, ...rest]);
-                    };
-                    
-                    XMLHttpRequest.prototype.send = function(data) {
-                        if (this._url && this._url.includes('browserinfo') && data) {
-                            try {
-                                const body = JSON.parse(data);
-                                if (body['f.req'] && Array.isArray(body['f.req'])) {
-                                    const reqData = JSON.parse(body['f.req'][0]);
-                                    // 确保屏幕尺寸正确
-                                    if (reqData[1] && Array.isArray(reqData[1])) {
-                                        reqData[1] = [null, 1080, 1920];
-                                    }
-                                    // 确保窗口尺寸正确
-                                    if (reqData[2] && Array.isArray(reqData[2])) {
-                                        reqData[2] = [null, window.innerHeight, window.innerWidth];
-                                    }
-                                    body['f.req'][0] = JSON.stringify(reqData);
-                                    data = JSON.stringify(body);
-                                }
-                            } catch(e) {
-                                // 如果解析失败，继续使用原始数据
-                            }
-                        }
-                        return originalXHRSend.apply(this, [data]);
-                    };
-                    
-                    // 19. 持续监控并修复 webdriver 属性（防止被重新设置）
-                    setInterval(() => {
-                        if (navigator.webdriver !== undefined) {
-                            try {
-                                Object.defineProperty(navigator, 'webdriver', {
-                                    get: () => undefined,
-                                    configurable: true,
-                                    enumerable: false
-                                });
-                            } catch(e) {}
-                        }
-                    }, 100);
-                })();
+                    return originalToDataURL.apply(this, arguments);
+                };
+                
+                // 覆盖 WebGL 指纹
+                const getParameter = WebGLRenderingContext.prototype.getParameter;
+                WebGLRenderingContext.prototype.getParameter = function(parameter) {
+                    if (parameter === 37445) {
+                        return 'Intel Inc.';
+                    }
+                    if (parameter === 37446) {
+                        return 'Intel Iris OpenGL Engine';
+                    }
+                    return getParameter.apply(this, arguments);
+                };
             """)
             print(f"[登录] ✓ 浏览器上下文已创建")
             
