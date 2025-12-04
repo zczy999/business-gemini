@@ -5,6 +5,7 @@
 import json
 import base64
 import uuid
+import re
 import requests
 from typing import List, Optional, Dict, Any, Generator
 
@@ -27,6 +28,47 @@ from .logger import print
 
 # account_manager 需要通过参数传递或导入
 # 为了避免循环引用，这里先不导入，通过参数传递
+
+
+# ---------- Markdown 代码块清理 ----------
+def strip_markdown_codeblock(text: str) -> str:
+    """去除 Markdown 代码块标记，返回纯内容
+
+    支持的格式：
+    - ```json\n...\n```
+    - ```\n...\n```
+    - 多个连续的代码块
+
+    Args:
+        text: 可能包含 Markdown 代码块的文本
+
+    Returns:
+        去除代码块标记后的纯文本
+    """
+    if not text:
+        return text
+
+    text = text.strip()
+
+    # 匹配 ```json 或 ``` 开头，``` 结尾的代码块
+    # 使用正则表达式处理可能的多行情况
+    pattern = r'^```(?:json|JSON)?\s*\n?(.*?)\n?```$'
+    match = re.match(pattern, text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+
+    # 如果没有完整匹配，尝试去除首尾的标记
+    if text.startswith('```json'):
+        text = text[7:]
+    elif text.startswith('```JSON'):
+        text = text[7:]
+    elif text.startswith('```'):
+        text = text[3:]
+
+    if text.endswith('```'):
+        text = text[:-3]
+
+    return text.strip()
 
 
 # ---------- JSON 流式解析器 (参考 j.py) ----------

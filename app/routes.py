@@ -52,7 +52,8 @@ from .chat_handler import (
     stream_chat_with_images,
     stream_chat_realtime_generator,
     build_openai_response_content,
-    get_image_base_url
+    get_image_base_url,
+    strip_markdown_codeblock
 )
 
 # 导入媒体处理
@@ -311,6 +312,10 @@ def register_routes(app):
             messages = data.get('messages', [])
             prompts = data.get('prompts', [])
             stream = data.get('stream', False)
+
+            # 检查 response_format 参数（OpenAI 兼容）
+            response_format = data.get('response_format', {})
+            is_json_mode = response_format.get('type') == 'json_object'
             
             models_config = account_manager.config.get("models", [])
             selected_model_config = None
@@ -836,6 +841,11 @@ def register_routes(app):
                 return Response(generate(), mimetype='text/event-stream')
             else:
                 # 非流式响应：response_content 可能是字符串或数组
+                # 如果是 json_object 模式，去除 Markdown 代码块标记
+                final_content = response_content
+                if is_json_mode and isinstance(response_content, str):
+                    final_content = strip_markdown_codeblock(response_content)
+
                 response = {
                     "id": f"chatcmpl-{uuid.uuid4().hex[:8]}",
                     "object": "chat.completion",
@@ -845,7 +855,7 @@ def register_routes(app):
                         "index": 0,
                         "message": {
                             "role": "assistant",
-                            "content": response_content  # 可以是字符串或数组
+                            "content": final_content  # 可以是字符串或数组
                         },
                         "finish_reason": "stop"
                     }],
