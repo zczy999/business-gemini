@@ -98,11 +98,16 @@ builtins.print = filtered_print
 print = filtered_print
 
 
+def get_current_log_level_name() -> str:
+    """获取当前日志级别名称"""
+    return CURRENT_LOG_LEVEL_NAME
+
+
 def set_log_level(level: str, persist: bool = False):
     """设置全局日志级别"""
     global CURRENT_LOG_LEVEL_NAME, CURRENT_LOG_LEVEL
     from .account_manager import account_manager
-    
+
     lvl = (level or "").upper()
     if lvl not in LOG_LEVELS:
         raise ValueError(f"无效日志级别: {level}")

@@ -82,7 +82,7 @@ from .exceptions import (
 )
 
 # 导入日志
-from .logger import set_log_level, CURRENT_LOG_LEVEL_NAME, LOG_LEVELS, print
+from .logger import set_log_level, get_current_log_level_name, LOG_LEVELS, print
 
 
 def register_routes(app):
@@ -1803,7 +1803,7 @@ def register_routes(app):
         """获取或设置日志级别"""
         if request.method == 'GET':
             return jsonify({
-                "level": CURRENT_LOG_LEVEL_NAME,
+                "level": get_current_log_level_name(),
                 "levels": list(LOG_LEVELS.keys())
             })
         
@@ -1813,7 +1813,7 @@ def register_routes(app):
             return jsonify({"error": "无效日志级别"}), 400
         
         set_log_level(level, persist=True)
-        return jsonify({"success": True, "level": CURRENT_LOG_LEVEL_NAME})
+        return jsonify({"success": True, "level": get_current_log_level_name()})
     
     @app.route('/api/auth/login', methods=['POST'])
     def admin_login():
@@ -1833,7 +1833,7 @@ def register_routes(app):
             set_admin_password(password)
         
         token = create_admin_token()
-        resp = jsonify({"token": token, "level": CURRENT_LOG_LEVEL_NAME})
+        resp = jsonify({"token": token, "level": get_current_log_level_name()})
         resp.set_cookie(
             "admin_token",
             token,
