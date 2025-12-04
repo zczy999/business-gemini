@@ -9,7 +9,10 @@ from typing import Optional, Dict, List
 from cryptography.fernet import Fernet
 import secrets
 
-from .database import SessionLocal, APIKey, APICallLog, get_db_session
+from .database import SessionLocal, APIKey, APICallLog, get_db_session, init_db
+
+# 确保数据库表已创建
+init_db()
 
 
 # 加密密钥（用于加密存储 API 密钥，便于显示）
