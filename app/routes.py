@@ -682,29 +682,11 @@ def register_routes(app):
                 def generate():
                     try:
                         # 使用真正的流式生成器，实时转发
+                        # 结束标记已在 stream_chat_realtime_generator 中发送
                         for chunk in stream_generator:
                             yield chunk
-                        
-                        # 流式生成器结束后，处理图片/视频（需要下载）
-                        # 注意：stream_chat_realtime_generator 返回 ChatResponse 对象
-                        # 但我们需要手动获取它，这里暂时跳过图片处理（图片会在生成器中处理）
-                        
-                        # 发送结束标记
-                        end_chunk = {
-                            "id": chat_id,
-                            "object": "chat.completion.chunk",
-                            "created": created_ts,
-                            "model": requested_model,
-                            "choices": [{
-                                "index": 0,
-                                "delta": {},
-                                "finish_reason": "stop"
-                            }]
-                        }
-                        yield f"data: {json.dumps(end_chunk, ensure_ascii=False)}\n\n"
-                        yield "data: [DONE]\n\n"
                     except Exception as e:
-                        # 错误处理
+                        # 错误处理：只有出错时才发送结束标记
                         error_chunk = {
                             "id": chat_id,
                             "object": "chat.completion.chunk",

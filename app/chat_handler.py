@@ -205,18 +205,21 @@ def stream_chat_realtime_generator(jwt: str, sess_name: str, message: str,
             sar = data.get("streamAssistResponse")
             if not sar:
                 continue
-            
+
             # 获取session信息
             session_info = sar.get("sessionInfo", {})
             if session_info.get("session"):
                 current_session = session_info["session"]
-            
+
+            answer = sar.get("answer") or {}
+
+            # 检测 state 字段，用于判断流是否结束
+            state = answer.get("state", "")
+
             # 检查顶层的generatedImages（图片需要下载，不能实时转发）
             for gen_img in sar.get("generatedImages", []):
                 parse_generated_media(gen_img, result, proxy, account_manager)
-            
-            answer = sar.get("answer") or {}
-            
+
             # 检查answer级别的generatedImages
             for gen_img in answer.get("generatedImages", []):
                 parse_generated_media(gen_img, result, proxy, account_manager)
@@ -415,10 +418,19 @@ def stream_chat_realtime_generator(jwt: str, sess_name: str, message: str,
                     print(f"[WARNING] 下载文件失败 {fid}: {e}")
         except Exception as e:
             print(f"[WARNING] 处理文件列表失败: {e}")
-    
-    # 流式模式下文本已实时转发，不需要返回 ChatResponse
-    # 图片/视频 URL 也已实时发送
-    pass
+
+    # ✅ 发送结束标记（对应 Gemini 的 state: "SUCCEEDED"）
+    if chat_id and created is not None and model_name:
+        end_chunk = {
+            "id": chat_id,
+            "object": "chat.completion.chunk",
+            "created": created,
+            "model": model_name,
+            "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]
+        }
+        yield f"data: {json.dumps(end_chunk, ensure_ascii=False)}\n\n"
+        yield "data: [DONE]\n\n"
+        print(f"[INFO] 流式响应完成 | chat_id={chat_id} | model={model_name}")
 
 
 def stream_chat_with_images(jwt: str, sess_name: str, message: str, 
