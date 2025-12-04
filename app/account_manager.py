@@ -354,7 +354,7 @@ class AccountManager:
                             max_tokens=model_data.get("max_tokens", 8192),
                             price_per_1k_tokens=model_data.get("price_per_1k_tokens"),
                             enabled=model_data.get("enabled", True),
-                            account_index=model_data.get("account_index", 0),
+                            account_index=model_data.get("account_index", -1),
                         )
                         db.add(model)
                 

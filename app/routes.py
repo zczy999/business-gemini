@@ -515,9 +515,13 @@ def register_routes(app):
                         if required_quota_type and not account_manager.is_account_available(account_idx, required_quota_type):
                             preferred_account_idx = None
                             account_idx, account = account_manager.get_next_account(required_quota_type)
+                            print(f"[轮训] 首选账号 {preferred_account_idx} 不可用，轮训选择账号 {account_idx}")
+                        else:
+                            print(f"[轮训] ⚠️ 使用模型指定的固定账号 {account_idx}（未走轮训）")
                     else:
                         # 根据请求类型选择对应配额类型可用的账号
                         account_idx, account = account_manager.get_next_account(required_quota_type)
+                        print(f"[轮训] 轮训选择账号 {account_idx}，current_index={account_manager.current_index}")
 
                     # ⚠️ 重要：如果使用了 file_id，且文件关联了 session，应该使用该 session
                     # 而不是创建新的 session，否则文件在旧 session 中，聊天在新 session 中，会看不到文件
@@ -1573,7 +1577,7 @@ def register_routes(app):
             "max_tokens": data.get("max_tokens", 8192),
             "price_per_1k_tokens": data.get("price_per_1k_tokens"),
             "enabled": data.get("enabled", True),
-            "account_index": data.get("account_index", 0)
+            "account_index": data.get("account_index", -1)
         }
         
         if "models" not in account_manager.config:

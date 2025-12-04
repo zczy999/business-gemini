@@ -78,7 +78,7 @@ class Model(Base):
     max_tokens = Column(Integer, default=8192)
     price_per_1k_tokens = Column(String(50), nullable=True)
     enabled = Column(Boolean, default=True)
-    account_index = Column(Integer, default=0)
+    account_index = Column(Integer, default=-1)  # -1 表示使用轮训，>=0 表示固定账号
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
