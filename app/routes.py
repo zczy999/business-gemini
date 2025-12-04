@@ -1857,7 +1857,13 @@ def register_routes(app):
         if "upload_api_token" in data:
             account_manager.config["upload_api_token"] = data["upload_api_token"]
         if "auto_refresh_cookie" in data:
-            account_manager.config["auto_refresh_cookie"] = bool(data["auto_refresh_cookie"])
+            new_value = bool(data["auto_refresh_cookie"])
+            old_value = account_manager.config.get("auto_refresh_cookie", False)
+            account_manager.config["auto_refresh_cookie"] = new_value
+            # 如果从关闭变为开启，动态启动自动刷新线程
+            if new_value and not old_value:
+                from .cookie_refresh import start_auto_refresh_thread
+                start_auto_refresh_thread()
         if "tempmail_worker_url" in data:
             account_manager.config["tempmail_worker_url"] = data["tempmail_worker_url"] or None
         if "log_level" in data:

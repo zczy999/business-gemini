@@ -19,6 +19,39 @@ from .account_manager import account_manager
 # 用于通知自动刷新线程立即检查过期账号的事件
 _immediate_refresh_event = threading.Event()
 
+# 用于跟踪自动刷新线程是否已启动
+_auto_refresh_thread_started = False
+_auto_refresh_thread_lock = threading.Lock()
+
+
+def start_auto_refresh_thread():
+    """
+    动态启动自动刷新线程（用于配置更新后启动）
+    如果线程已经启动，则不会重复启动
+    返回: True 表示启动成功或已经在运行，False 表示无法启动
+    """
+    global _auto_refresh_thread_started
+
+    with _auto_refresh_thread_lock:
+        if _auto_refresh_thread_started:
+            print("[Cookie 自动刷新] 线程已在运行中，无需重复启动")
+            return True
+
+        if not PLAYWRIGHT_AVAILABLE:
+            print("[Cookie 自动刷新] Playwright 未安装，无法启动自动刷新")
+            return False
+
+        if not PLAYWRIGHT_BROWSER_INSTALLED:
+            print("[Cookie 自动刷新] Playwright 浏览器未安装，无法启动自动刷新")
+            return False
+
+        # 启动线程
+        thread = threading.Thread(target=auto_refresh_expired_cookies_worker, daemon=True)
+        thread.start()
+        _auto_refresh_thread_started = True
+        print("[Cookie 自动刷新] ✓ 后台线程已动态启动")
+        return True
+
 
 def refresh_cookie_with_browser(account: dict, proxy: Optional[str] = None) -> Optional[Dict[str, str]]:
     """
@@ -1404,23 +1437,29 @@ def auto_refresh_expired_cookies_worker():
     后台线程：定期检查过期的 Cookie，使用临时邮箱自动刷新
     这是主要的 Cookie 自动刷新机制，通过临时邮箱登录来更新过期的 Cookie
     """
+    global _auto_refresh_thread_started
+
     if not PLAYWRIGHT_AVAILABLE:
         print("[提示] Playwright 未安装，Cookie 自动刷新功能已禁用")
         return
-    
+
     if not PLAYWRIGHT_BROWSER_INSTALLED:
         print("[提示] Playwright 浏览器未安装，Cookie 自动刷新功能已禁用")
         return
-    
+
     # 等待一下，让主程序完全启动
     time.sleep(10)
-    
+
     # 检查配置是否启用自动刷新
     auto_refresh_enabled = account_manager.config.get("auto_refresh_cookie", False)
     if not auto_refresh_enabled:
         print("[提示] 自动刷新 Cookie 功能未启用（在系统设置中启用）")
         return
-    
+
+    # 标记线程已启动
+    with _auto_refresh_thread_lock:
+        _auto_refresh_thread_started = True
+
     print("[Cookie 自动刷新] 后台线程已启动，将每30分钟检查一次过期的 Cookie")
     
     # 检查间隔：30分钟
