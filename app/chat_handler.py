@@ -257,6 +257,10 @@ def stream_chat_realtime_generator(jwt: str, sess_name: str, message: str,
                 for att in reply.get("attachments", []) + gc.get("attachments", []) + content.get("attachments", []):
                     parse_attachment(att, result, proxy, account_manager)
                 
+                # ✅ 调试日志：记录每个 reply 的详细信息
+                if text:
+                    print(f"[DEBUG] Reply | thought={thought} | startswith**={text.strip().startswith('**')} | len={len(text)} | content={text[:80]}")
+
                 # ✅ 只处理非思考输出，实时转发文本
                 # 过滤条件：有文本、不是 thought、不是以 ** 开头的思考标题
                 if text and not thought and not text.strip().startswith("**"):
@@ -619,6 +623,10 @@ def stream_chat_with_images(jwt: str, sess_name: str, message: str,
                 # 检查attachments
                 for att in reply.get("attachments", []) + gc.get("attachments", []) + content.get("attachments", []):
                     parse_attachment(att, result, proxy, account_manager)
+
+                # ✅ 调试日志：记录每个 reply 的详细信息
+                if text:
+                    print(f"[DEBUG] Reply | thought={thought} | startswith**={text.strip().startswith('**')} | len={len(text)} | content={text[:80]}")
 
                 # ✅ 只处理非思考输出
                 # 过滤条件：有文本、不是 thought、不是以 ** 开头的思考标题

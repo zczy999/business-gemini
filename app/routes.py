@@ -684,6 +684,8 @@ def register_routes(app):
                         # 使用真正的流式生成器，实时转发
                         # 结束标记已在 stream_chat_realtime_generator 中发送
                         for chunk in stream_generator:
+                            # ✅ 打印流式响应日志
+                            print(f"[DEBUG] 流式chunk: {chunk.strip()}")
                             yield chunk
                     except Exception as e:
                         # 错误处理：只有出错时才发送结束标记
@@ -870,7 +872,10 @@ def register_routes(app):
                     )
                 except Exception:
                     pass  # 日志记录失败不应影响主流程
-                
+
+                # ✅ 打印完整响应日志
+                print(f"[DEBUG] 完整响应: {json.dumps(response, ensure_ascii=False)}")
+
                 return jsonify(response)
 
         except Exception as e:
