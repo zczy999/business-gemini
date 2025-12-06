@@ -666,21 +666,16 @@ def get_verification_code_from_tempmail_browser(page, timeout=120, tempmail_url:
             mail_id, mail_item, mail_text = candidates[0]
             
             # 只有当新邮件的ID大于之前记录的最高ID时，才认为是真正的新邮件
-            # 或者如果ID等于last_max_id但之前提取失败，允许重试
+            # 严格限制：mail_id 必须 > last_max_id，防止使用旧邮件中的验证码
             if mail_id > last_max_id:
                 # 调试日志已关闭
                 # print(f"[临时邮箱] ✓ 找到 {len(candidates)} 封验证码邮件，发现新邮件 (ID: {mail_id})")
                 # 注意：只有在成功提取验证码后才更新 last_max_id
                 pass
-            elif mail_id == last_max_id:
-                # 如果ID相同，说明是同一封邮件，可能是之前提取失败，允许重试
-                # 调试日志已关闭
-                # print(f"[临时邮箱] ✓ 找到验证码邮件，重试提取验证码 (ID: {mail_id})")
-                pass
             else:
+                # mail_id <= last_max_id，是旧邮件，跳过
                 # 调试日志已关闭
                 # print(f"[临时邮箱] ⚠ 当前最高ID ({mail_id}) 未超过之前记录 ({last_max_id})，继续等待新邮件...")
-                pass
                 # 继续下一轮循环，等待真正的新邮件
                 continue
         else:
