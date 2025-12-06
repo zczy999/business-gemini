@@ -279,20 +279,21 @@ class TempMailAPIClient:
         
         # 获取目标邮箱地址用于过滤
         target_email = self.get_email_address()
-        
+
         start_time = time.time()
         attempts = 0
         max_attempts = timeout // 5  # 改为每 5 秒检查一次
         # 使用实例变量 last_max_id，以便在重试模式下记住已处理的最大 ID
-        last_max_id = self.last_max_id if retry_mode else 0
+        # 如果调用者已设置了 last_max_id（> 0），则使用它作为初始值
+        last_max_id = self.last_max_id
         last_mail_count = 0  # 记录上次的邮件数量，避免重复打印
-        initial_max_id_set = (retry_mode and self.last_max_id > 0)  # 重试模式下，如果已有 last_max_id，则跳过初始处理
-        
+        # 如果 last_max_id > 0，说明调用者已设置了初始最大 ID，跳过初始处理
+        initial_max_id_set = (self.last_max_id > 0)
+
         # 第一次调用时，先获取当前的最大邮件ID，然后等待新邮件到达
-        # 注意：检测到"验证码邮件发送成功"提示后，才调用此函数
-        # 所以应该等待新邮件到达，而不是处理现有的最新邮件
-        initial_max_id = 0
-        if not retry_mode:
+        # 注意：如果调用者已设置了 last_max_id，则跳过此步骤
+        initial_max_id = self.last_max_id
+        if not retry_mode and not initial_max_id_set:
             # log_print(f"[临时邮箱 API] 等待验证码邮件（最多 {timeout} 秒）...")
             # 先获取一次邮件列表，记录当前的最大ID（在检测到提示时，邮件可能还没到达）
             try:

@@ -174,6 +174,67 @@ def extract_verification_code(text: str) -> Optional[str]:
     print("[临时邮箱] 未能从邮件文本中提取验证码")
     return None
 
+
+def get_current_max_mail_id(tempmail_url: str, page=None) -> int:
+    """获取临时邮箱当前最大邮件 ID（使用浏览器方式）
+
+    在登录流程开始前调用，记录当前最大邮件 ID，
+    后续只处理 ID 大于这个值的新邮件，避免匹配到旧验证码。
+
+    Args:
+        tempmail_url: 临时邮箱 URL
+        page: Playwright 页面对象
+
+    Returns:
+        当前最大邮件 ID，如果获取失败返回 0
+    """
+    if not page:
+        return 0
+
+    try:
+        # 邮件列表选择器
+        email_list_selectors = [
+            "li.n-list-item",
+            ".n-list-item",
+        ]
+
+        mail_items = []
+        for selector in email_list_selectors:
+            try:
+                mail_items = page.locator(selector).all()
+                if len(mail_items) > 0:
+                    break
+            except:
+                continue
+
+        if not mail_items:
+            print(f"[临时邮箱] ✓ 邮箱为空，将处理所有新邮件")
+            return 0
+
+        # 提取所有邮件的 ID，找出最大值
+        max_id = 0
+        for mail_item in mail_items:
+            try:
+                mail_text = mail_item.text_content() or ""
+                id_match = re.search(r'ID:\s*(\d+)', mail_text, re.MULTILINE)
+                if id_match:
+                    mail_id = int(id_match.group(1))
+                    if mail_id > max_id:
+                        max_id = mail_id
+            except:
+                continue
+
+        if max_id > 0:
+            print(f"[临时邮箱] ✓ 登录前最大邮件 ID: {max_id}（后续只处理 ID > {max_id} 的新邮件）")
+            return max_id
+        else:
+            print(f"[临时邮箱] ✓ 未找到邮件 ID，将处理所有邮件")
+            return 0
+    except Exception as e:
+        print(f"[临时邮箱] ⚠ 获取最大邮件 ID 失败: {e}，将处理所有邮件")
+        return 0
+
+
 def get_email_from_tempmail(page, tempmail_url: str) -> Optional[str]:
     """从临时邮箱服务获取邮箱地址"""
     # 调试日志已关闭
@@ -333,9 +394,9 @@ except ImportError:
 # 客户端实例缓存（以 tempmail_url 为键，用于在重试时复用 last_max_id）
 _tempmail_client_cache = {}
 
-def get_verification_code_from_tempmail(page, timeout=120, tempmail_url: Optional[str] = None, retry_mode: bool = False, account_config: Optional[Dict] = None, force_api: bool = False) -> Optional[str]:
+def get_verification_code_from_tempmail(page, timeout=120, tempmail_url: Optional[str] = None, retry_mode: bool = False, account_config: Optional[Dict] = None, force_api: bool = False, initial_max_mail_id: int = 0) -> Optional[str]:
     """从临时邮箱服务获取验证码（自动选择 API 或浏览器方式）
-    
+
     Args:
         page: Playwright 页面对象
         timeout: 超时时间（秒）
@@ -343,7 +404,8 @@ def get_verification_code_from_tempmail(page, timeout=120, tempmail_url: Optiona
         retry_mode: 是否为重试模式（True：立即刷新并提取，不等待；False：等待邮件到达）
         account_config: 账号配置字典（可选，用于其他用途）
         force_api: 是否强制使用 API 方式（True：即使失败也不回退到浏览器方式）
-    
+        initial_max_mail_id: 登录前的最大邮件 ID，只处理 ID 大于此值的新邮件（默认 0 表示处理所有邮件）
+
     Returns:
         验证码字符串，如果未找到则返回 None
     """
@@ -384,8 +446,13 @@ def get_verification_code_from_tempmail(page, timeout=120, tempmail_url: Optiona
             
             # 如果客户端创建成功，直接使用它来获取验证码（以便复用 last_max_id）
             if client:
+                # 如果提供了 initial_max_mail_id，设置客户端的 last_max_id
+                # 这样只会处理 ID 大于此值的新邮件，避免匹配到旧验证码
+                if initial_max_mail_id > 0 and client.last_max_id < initial_max_mail_id:
+                    print(f"[临时邮箱] 设置初始最大邮件 ID: {initial_max_mail_id}（只处理新邮件）")
+                    client.last_max_id = initial_max_mail_id
                 code = client.get_verification_code(
-                    timeout, 
+                    timeout,
                     retry_mode,
                     extract_code_func=extract_verification_code
                 )
@@ -416,17 +483,18 @@ def get_verification_code_from_tempmail(page, timeout=120, tempmail_url: Optiona
         return None
     
     # 回退到浏览器方式（原有实现）
-    return get_verification_code_from_tempmail_browser(page, timeout, tempmail_url, retry_mode)
+    return get_verification_code_from_tempmail_browser(page, timeout, tempmail_url, retry_mode, initial_max_mail_id)
 
 
-def get_verification_code_from_tempmail_browser(page, timeout=120, tempmail_url: Optional[str] = None, retry_mode: bool = False) -> Optional[str]:
+def get_verification_code_from_tempmail_browser(page, timeout=120, tempmail_url: Optional[str] = None, retry_mode: bool = False, initial_max_mail_id: int = 0) -> Optional[str]:
     """从临时邮箱服务获取验证码（使用浏览器自动化方式）
-    
+
     Args:
         page: Playwright 页面对象
         timeout: 超时时间（秒）
         tempmail_url: 临时邮箱 URL
         retry_mode: 是否为重试模式（True：立即刷新并提取，不等待；False：等待邮件到达）
+        initial_max_mail_id: 登录前的最大邮件 ID，只处理 ID 大于此值的新邮件（默认 0 表示处理所有邮件）
     """
     if retry_mode:
         # 调试日志已关闭
@@ -495,7 +563,10 @@ def get_verification_code_from_tempmail_browser(page, timeout=120, tempmail_url:
     else:
         # 正常模式：等待邮件到达
         max_attempts = timeout // 10
-    last_max_id = 0  # 记录上一次看到的最高ID，确保只处理真正的新邮件
+    # 使用 initial_max_mail_id 作为初始值，只处理 ID 大于此值的新邮件
+    last_max_id = initial_max_mail_id
+    if initial_max_mail_id > 0:
+        print(f"[临时邮箱] 浏览器方式：只处理 ID > {initial_max_mail_id} 的新邮件")
     
     while attempts < max_attempts:
         attempts += 1
@@ -1706,11 +1777,11 @@ def main():
         ])
         
         browser = p.chromium.launch(headless=use_headless, args=launch_args)
-        
+
         # 创建浏览器上下文，使用真实的用户代理和视口
         context = browser.new_context(
             viewport={"width": 1920, "height": 1080},
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
             locale="zh-CN",
             timezone_id="Asia/Shanghai",
             # 添加额外的反检测措施
@@ -1719,22 +1790,62 @@ def main():
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
             }
         )
-        
+
         # 注入脚本以隐藏自动化特征（增强版，更好地绕过 reCAPTCHA）
         context.add_init_script("""
             // 覆盖 navigator.webdriver
             Object.defineProperty(navigator, 'webdriver', {
                 get: () => undefined
             });
-            
+
+            // 删除 webdriver 属性
+            delete Object.getPrototypeOf(navigator).webdriver;
+
             // 覆盖 chrome 对象
             window.chrome = {
-                runtime: {},
-                loadTimes: function() {},
-                csi: function() {},
-                app: {}
+                runtime: {
+                    connect: function() {},
+                    sendMessage: function() {}
+                },
+                loadTimes: function() {
+                    return {
+                        commitLoadTime: Date.now() / 1000,
+                        connectionInfo: "h2",
+                        finishDocumentLoadTime: Date.now() / 1000,
+                        finishLoadTime: Date.now() / 1000,
+                        firstPaintAfterLoadTime: 0,
+                        firstPaintTime: Date.now() / 1000,
+                        navigationType: "Other",
+                        npnNegotiatedProtocol: "h2",
+                        requestTime: Date.now() / 1000,
+                        startLoadTime: Date.now() / 1000,
+                        wasAlternateProtocolAvailable: false,
+                        wasFetchedViaSpdy: true,
+                        wasNpnNegotiated: true
+                    };
+                },
+                csi: function() {
+                    return {
+                        onloadT: Date.now(),
+                        startE: Date.now(),
+                        pageT: Date.now()
+                    };
+                },
+                app: {
+                    isInstalled: false,
+                    InstallState: {
+                        DISABLED: "disabled",
+                        INSTALLED: "installed",
+                        NOT_INSTALLED: "not_installed"
+                    },
+                    RunningState: {
+                        CANNOT_RUN: "cannot_run",
+                        READY_TO_RUN: "ready_to_run",
+                        RUNNING: "running"
+                    }
+                }
             };
-            
+
             // 覆盖 permissions
             const originalQuery = window.navigator.permissions.query;
             window.navigator.permissions.query = (parameters) => (
@@ -1742,70 +1853,143 @@ def main():
                     Promise.resolve({ state: Notification.permission }) :
                     originalQuery(parameters)
             );
-            
-            // 覆盖 plugins
+
+            // 覆盖 plugins - 返回真实格式
             Object.defineProperty(navigator, 'plugins', {
-                get: () => [1, 2, 3, 4, 5]
+                get: () => {
+                    const plugins = [
+                        { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
+                        { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
+                        { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' }
+                    ];
+                    plugins.length = 3;
+                    return plugins;
+                }
             });
-            
+
+            // 覆盖 mimeTypes
+            Object.defineProperty(navigator, 'mimeTypes', {
+                get: () => {
+                    const mimeTypes = [
+                        { type: 'application/pdf', suffixes: 'pdf', description: 'Portable Document Format' },
+                        { type: 'application/x-google-chrome-pdf', suffixes: 'pdf', description: 'Portable Document Format' }
+                    ];
+                    mimeTypes.length = 2;
+                    return mimeTypes;
+                }
+            });
+
             // 覆盖 languages
             Object.defineProperty(navigator, 'languages', {
-                get: () => ['zh-CN', 'zh', 'en']
+                get: () => ['zh-CN', 'zh', 'en-US', 'en']
             });
-            
-            // 覆盖 webdriver 相关属性
-            delete navigator.__proto__.webdriver;
-            
+
             // 覆盖 getBattery
             if (navigator.getBattery) {
                 navigator.getBattery = () => Promise.resolve({
                     charging: true,
                     chargingTime: 0,
                     dischargingTime: Infinity,
-                    level: 1
+                    level: 0.95 + Math.random() * 0.05,
+                    addEventListener: function() {}
                 });
             }
-            
+
             // 覆盖 connection
             Object.defineProperty(navigator, 'connection', {
                 get: () => ({
                     effectiveType: '4g',
-                    rtt: 50,
-                    downlink: 10,
+                    rtt: 50 + Math.floor(Math.random() * 50),
+                    downlink: 10 + Math.random() * 5,
                     saveData: false
                 })
             });
-            
+
             // 覆盖 hardwareConcurrency
             Object.defineProperty(navigator, 'hardwareConcurrency', {
                 get: () => 8
             });
-            
+
             // 覆盖 deviceMemory
             Object.defineProperty(navigator, 'deviceMemory', {
                 get: () => 8
             });
-            
-            // 覆盖 canvas 指纹
+
+            // 覆盖 platform
+            Object.defineProperty(navigator, 'platform', {
+                get: () => 'Win32'
+            });
+
+            // 覆盖 vendor
+            Object.defineProperty(navigator, 'vendor', {
+                get: () => 'Google Inc.'
+            });
+
+            // 覆盖 maxTouchPoints
+            Object.defineProperty(navigator, 'maxTouchPoints', {
+                get: () => 0
+            });
+
+            // 覆盖 canvas 指纹 - 添加微小噪声
             const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
             HTMLCanvasElement.prototype.toDataURL = function(type) {
-                if (type === 'image/png') {
-                    return originalToDataURL.apply(this, arguments);
+                if (type === 'image/png' || type === 'image/jpeg') {
+                    const context = this.getContext('2d');
+                    if (context) {
+                        const imageData = context.getImageData(0, 0, this.width, this.height);
+                        for (let i = 0; i < imageData.data.length; i += 4) {
+                            imageData.data[i] ^= (Math.random() > 0.99 ? 1 : 0);
+                        }
+                        context.putImageData(imageData, 0, 0);
+                    }
                 }
                 return originalToDataURL.apply(this, arguments);
             };
-            
+
             // 覆盖 WebGL 指纹
             const getParameter = WebGLRenderingContext.prototype.getParameter;
             WebGLRenderingContext.prototype.getParameter = function(parameter) {
-                if (parameter === 37445) {
-                    return 'Intel Inc.';
-                }
-                if (parameter === 37446) {
-                    return 'Intel Iris OpenGL Engine';
-                }
+                if (parameter === 37445) return 'Intel Inc.';
+                if (parameter === 37446) return 'Intel Iris OpenGL Engine';
                 return getParameter.apply(this, arguments);
             };
+
+            // 覆盖 WebGL2 指纹
+            if (typeof WebGL2RenderingContext !== 'undefined') {
+                const getParameter2 = WebGL2RenderingContext.prototype.getParameter;
+                WebGL2RenderingContext.prototype.getParameter = function(parameter) {
+                    if (parameter === 37445) return 'Intel Inc.';
+                    if (parameter === 37446) return 'Intel Iris OpenGL Engine';
+                    return getParameter2.apply(this, arguments);
+                };
+            }
+
+            // 覆盖 AudioContext 指纹
+            if (typeof AudioContext !== 'undefined') {
+                const originalGetChannelData = AudioBuffer.prototype.getChannelData;
+                AudioBuffer.prototype.getChannelData = function(channel) {
+                    const result = originalGetChannelData.call(this, channel);
+                    for (let i = 0; i < result.length; i += 100) {
+                        result[i] += (Math.random() - 0.5) * 0.0001;
+                    }
+                    return result;
+                };
+            }
+
+            // 覆盖 Screen 属性
+            Object.defineProperty(screen, 'availWidth', { get: () => 1920 });
+            Object.defineProperty(screen, 'availHeight', { get: () => 1040 });
+            Object.defineProperty(screen, 'width', { get: () => 1920 });
+            Object.defineProperty(screen, 'height', { get: () => 1080 });
+            Object.defineProperty(screen, 'colorDepth', { get: () => 24 });
+            Object.defineProperty(screen, 'pixelDepth', { get: () => 24 });
+
+            // 覆盖 Notification
+            if (typeof Notification !== 'undefined') {
+                Object.defineProperty(Notification, 'permission', {
+                    get: () => 'default'
+                });
+            }
         """)
         
         # 创建两个标签页：一个用于临时邮箱，一个用于登录
@@ -2235,7 +2419,7 @@ def _refresh_single_account_internal(account_idx: int, account: dict, headless: 
             print(f"[登录] 正在创建浏览器上下文...")
             context = browser.new_context(
                 viewport={"width": 1920, "height": 1080},
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
                 locale="zh-CN",
                 timezone_id="Asia/Shanghai",
                 # 添加额外的反检测措施
@@ -2251,15 +2435,55 @@ def _refresh_single_account_internal(account_idx: int, account: dict, headless: 
                 Object.defineProperty(navigator, 'webdriver', {
                     get: () => undefined
                 });
-                
+
+                // 删除 webdriver 属性
+                delete Object.getPrototypeOf(navigator).webdriver;
+
                 // 覆盖 chrome 对象
                 window.chrome = {
-                    runtime: {},
-                    loadTimes: function() {},
-                    csi: function() {},
-                    app: {}
+                    runtime: {
+                        connect: function() {},
+                        sendMessage: function() {}
+                    },
+                    loadTimes: function() {
+                        return {
+                            commitLoadTime: Date.now() / 1000,
+                            connectionInfo: "h2",
+                            finishDocumentLoadTime: Date.now() / 1000,
+                            finishLoadTime: Date.now() / 1000,
+                            firstPaintAfterLoadTime: 0,
+                            firstPaintTime: Date.now() / 1000,
+                            navigationType: "Other",
+                            npnNegotiatedProtocol: "h2",
+                            requestTime: Date.now() / 1000,
+                            startLoadTime: Date.now() / 1000,
+                            wasAlternateProtocolAvailable: false,
+                            wasFetchedViaSpdy: true,
+                            wasNpnNegotiated: true
+                        };
+                    },
+                    csi: function() {
+                        return {
+                            onloadT: Date.now(),
+                            startE: Date.now(),
+                            pageT: Date.now()
+                        };
+                    },
+                    app: {
+                        isInstalled: false,
+                        InstallState: {
+                            DISABLED: "disabled",
+                            INSTALLED: "installed",
+                            NOT_INSTALLED: "not_installed"
+                        },
+                        RunningState: {
+                            CANNOT_RUN: "cannot_run",
+                            READY_TO_RUN: "ready_to_run",
+                            RUNNING: "running"
+                        }
+                    }
                 };
-                
+
                 // 覆盖 permissions
                 const originalQuery = window.navigator.permissions.query;
                 window.navigator.permissions.query = (parameters) => (
@@ -2267,70 +2491,143 @@ def _refresh_single_account_internal(account_idx: int, account: dict, headless: 
                         Promise.resolve({ state: Notification.permission }) :
                         originalQuery(parameters)
                 );
-                
-                // 覆盖 plugins
+
+                // 覆盖 plugins - 返回真实格式
                 Object.defineProperty(navigator, 'plugins', {
-                    get: () => [1, 2, 3, 4, 5]
+                    get: () => {
+                        const plugins = [
+                            { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
+                            { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
+                            { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' }
+                        ];
+                        plugins.length = 3;
+                        return plugins;
+                    }
                 });
-                
+
+                // 覆盖 mimeTypes
+                Object.defineProperty(navigator, 'mimeTypes', {
+                    get: () => {
+                        const mimeTypes = [
+                            { type: 'application/pdf', suffixes: 'pdf', description: 'Portable Document Format' },
+                            { type: 'application/x-google-chrome-pdf', suffixes: 'pdf', description: 'Portable Document Format' }
+                        ];
+                        mimeTypes.length = 2;
+                        return mimeTypes;
+                    }
+                });
+
                 // 覆盖 languages
                 Object.defineProperty(navigator, 'languages', {
-                    get: () => ['zh-CN', 'zh', 'en']
+                    get: () => ['zh-CN', 'zh', 'en-US', 'en']
                 });
-                
-                // 覆盖 webdriver 相关属性
-                delete navigator.__proto__.webdriver;
-                
+
                 // 覆盖 getBattery
                 if (navigator.getBattery) {
                     navigator.getBattery = () => Promise.resolve({
                         charging: true,
                         chargingTime: 0,
                         dischargingTime: Infinity,
-                        level: 1
+                        level: 0.95 + Math.random() * 0.05,
+                        addEventListener: function() {}
                     });
                 }
-                
+
                 // 覆盖 connection
                 Object.defineProperty(navigator, 'connection', {
                     get: () => ({
                         effectiveType: '4g',
-                        rtt: 50,
-                        downlink: 10,
+                        rtt: 50 + Math.floor(Math.random() * 50),
+                        downlink: 10 + Math.random() * 5,
                         saveData: false
                     })
                 });
-                
+
                 // 覆盖 hardwareConcurrency
                 Object.defineProperty(navigator, 'hardwareConcurrency', {
                     get: () => 8
                 });
-                
+
                 // 覆盖 deviceMemory
                 Object.defineProperty(navigator, 'deviceMemory', {
                     get: () => 8
                 });
-                
-                // 覆盖 canvas 指纹
+
+                // 覆盖 platform
+                Object.defineProperty(navigator, 'platform', {
+                    get: () => 'Win32'
+                });
+
+                // 覆盖 vendor
+                Object.defineProperty(navigator, 'vendor', {
+                    get: () => 'Google Inc.'
+                });
+
+                // 覆盖 maxTouchPoints
+                Object.defineProperty(navigator, 'maxTouchPoints', {
+                    get: () => 0
+                });
+
+                // 覆盖 canvas 指纹 - 添加微小噪声
                 const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
                 HTMLCanvasElement.prototype.toDataURL = function(type) {
-                    if (type === 'image/png') {
-                        return originalToDataURL.apply(this, arguments);
+                    if (type === 'image/png' || type === 'image/jpeg') {
+                        const context = this.getContext('2d');
+                        if (context) {
+                            const imageData = context.getImageData(0, 0, this.width, this.height);
+                            for (let i = 0; i < imageData.data.length; i += 4) {
+                                imageData.data[i] ^= (Math.random() > 0.99 ? 1 : 0);
+                            }
+                            context.putImageData(imageData, 0, 0);
+                        }
                     }
                     return originalToDataURL.apply(this, arguments);
                 };
-                
+
                 // 覆盖 WebGL 指纹
                 const getParameter = WebGLRenderingContext.prototype.getParameter;
                 WebGLRenderingContext.prototype.getParameter = function(parameter) {
-                    if (parameter === 37445) {
-                        return 'Intel Inc.';
-                    }
-                    if (parameter === 37446) {
-                        return 'Intel Iris OpenGL Engine';
-                    }
+                    if (parameter === 37445) return 'Intel Inc.';
+                    if (parameter === 37446) return 'Intel Iris OpenGL Engine';
                     return getParameter.apply(this, arguments);
                 };
+
+                // 覆盖 WebGL2 指纹
+                if (typeof WebGL2RenderingContext !== 'undefined') {
+                    const getParameter2 = WebGL2RenderingContext.prototype.getParameter;
+                    WebGL2RenderingContext.prototype.getParameter = function(parameter) {
+                        if (parameter === 37445) return 'Intel Inc.';
+                        if (parameter === 37446) return 'Intel Iris OpenGL Engine';
+                        return getParameter2.apply(this, arguments);
+                    };
+                }
+
+                // 覆盖 AudioContext 指纹
+                if (typeof AudioContext !== 'undefined') {
+                    const originalGetChannelData = AudioBuffer.prototype.getChannelData;
+                    AudioBuffer.prototype.getChannelData = function(channel) {
+                        const result = originalGetChannelData.call(this, channel);
+                        for (let i = 0; i < result.length; i += 100) {
+                            result[i] += (Math.random() - 0.5) * 0.0001;
+                        }
+                        return result;
+                    };
+                }
+
+                // 覆盖 Screen 属性
+                Object.defineProperty(screen, 'availWidth', { get: () => 1920 });
+                Object.defineProperty(screen, 'availHeight', { get: () => 1040 });
+                Object.defineProperty(screen, 'width', { get: () => 1920 });
+                Object.defineProperty(screen, 'height', { get: () => 1080 });
+                Object.defineProperty(screen, 'colorDepth', { get: () => 24 });
+                Object.defineProperty(screen, 'pixelDepth', { get: () => 24 });
+
+                // 覆盖 Notification
+                if (typeof Notification !== 'undefined') {
+                    Object.defineProperty(Notification, 'permission', {
+                        get: () => 'default'
+                    });
+                }
             """)
             print(f"[登录] ✓ 浏览器上下文已创建")
             
@@ -2350,7 +2647,10 @@ def _refresh_single_account_internal(account_idx: int, account: dict, headless: 
                         print(f"[单个账号刷新] ✗ 账号 {account_idx} 无法获取邮箱")
                         return False
                     print(f"[登录] ✓ 已获取临时邮箱: {email}")
-                    
+
+                    # 步骤1.5：获取当前最大邮件 ID（用于过滤旧邮件）
+                    initial_max_mail_id = get_current_max_mail_id(tempmail_url, email_page)
+
                     # 步骤2：在登录页面输入邮箱并点击继续，触发发送验证码邮件
                     print(f"[登录] 正在导航到登录页面...")
                     login_page.goto(GEMINI_LOGIN_URL, wait_until="networkidle", timeout=60000)
@@ -2983,171 +3283,9 @@ def _refresh_single_account_internal(account_idx: int, account: dict, headless: 
                                             
                                             if email_sent_confirmed:
                                                 print("[登录] ✓ 检测到验证码邮件发送成功的提示，开始获取验证码...")
-                                                # 为了确保邮件发送成功，在确认验证码已发送成功后，再点击一次"重新发送验证码"按钮
-                                                if resend_already_clicked:
-                                                    print("[登录] ℹ 已在检测循环中点击过重新发送验证码按钮，跳过重复点击")
-                                                else:
-                                                    # 再点击一次"重新发送验证码"按钮，确保邮件发送成功
-                                                    print("[登录] 为了确保邮件发送成功，再点击一次重新发送验证码按钮...")
-                                                    try:
-                                                        resend_btn_selectors_ensure = [
-                                                            "button[aria-label='重新发送验证码']",
-                                                            "button:has-text('重新发送验证码')",
-                                                            "button:has-text('重新发送')",
-                                                            "button:has-text('Resend')",
-                                                        ]
-                                                        resend_clicked_ensure = False
-                                                        for selector_ensure in resend_btn_selectors_ensure:
-                                                            try:
-                                                                resend_btn_ensure = login_page.locator(selector_ensure).first
-                                                                if resend_btn_ensure.count() > 0:
-                                                                    resend_btn_ensure.wait_for(state="visible", timeout=5000)
-                                                                    if not resend_btn_ensure.is_disabled():
-                                                                        # 在点击前等待 reCAPTCHA 准备好
-                                                                        if wait_for_recaptcha_ready(login_page, timeout=5):
-                                                                            print("[登录] reCAPTCHA 已准备好，准备点击重新发送验证码按钮...")
-                                                                        
-                                                                        # 模拟真实用户行为：先移动鼠标到按钮位置
-                                                                        try:
-                                                                            box = resend_btn_ensure.bounding_box()
-                                                                            if box:
-                                                                                login_page.mouse.move(
-                                                                                    box['x'] + box['width'] / 2 + random.uniform(-5, 5),
-                                                                                    box['y'] + box['height'] / 2 + random.uniform(-5, 5)
-                                                                                )
-                                                                                login_page.wait_for_timeout(random.randint(100, 300))
-                                                                        except:
-                                                                            pass
-                                                                        
-                                                                        # 记录点击前的页面状态
-                                                                        try:
-                                                                            before_click_url_ensure = login_page.url
-                                                                            before_click_text_ensure = login_page.locator("body").text_content() or ""
-                                                                            before_click_preview_ensure = before_click_text_ensure[:500] if len(before_click_text_ensure) > 500 else before_click_text_ensure
-                                                                            print(f"[登录] 点击前 URL: {before_click_url_ensure}")
-                                                                            print(f"[登录] 点击前页面文本预览: {before_click_preview_ensure}")
-                                                                        except:
-                                                                            pass
-                                                                        
-                                                                        # 点击按钮
-                                                                        resend_btn_ensure.click(delay=random.randint(50, 150))
-                                                                        print(f"[登录] ✓ 已点击重新发送验证码按钮（确保邮件发送成功）")
-                                                                        
-                                                                        # 点击后等待 reCAPTCHA 验证完成
-                                                                        wait_for_recaptcha_complete(login_page, timeout=30)
-                                                                        
-                                                                        # 等待一下让页面响应
-                                                                        login_page.wait_for_timeout(2000)
-                                                                        
-                                                                        # 点击后检查页面是否有错误提示
-                                                                        try:
-                                                                            after_click_url_ensure = login_page.url
-                                                                            print(f"[登录] 点击后 URL: {after_click_url_ensure}")
-                                                                            
-                                                                            # 先检查特定的错误提示元素（aside.zyTWof-Ng57nc 中的错误提示）
-                                                                            error_detected = False
-                                                                            error_text_found = ""
-                                                                            
-                                                                            try:
-                                                                                # 检查 aside 元素中的错误提示
-                                                                                aside_elements = login_page.locator("aside.zyTWof-Ng57nc").all()
-                                                                                for aside_elem in aside_elements:
-                                                                                    try:
-                                                                                        # 检查 aside 是否可见
-                                                                                        if aside_elem.is_visible():
-                                                                                            aside_text = aside_elem.text_content() or ""
-                                                                                            # 检查是否包含错误提示
-                                                                                            if "出了点问题" in aside_text and "请稍后再试" in aside_text:
-                                                                                                error_detected = True
-                                                                                                error_text_found = aside_text[:200]
-                                                                                                print(f"[登录] ⚠ 检测到错误提示元素（aside）: {error_text_found}")
-                                                                                                break
-                                                                                    except:
-                                                                                        continue
-                                                                            except:
-                                                                                pass
-                                                                            
-                                                                            # 如果没有在 aside 中找到，检查 div.zyTWof-gIZMF 中的错误提示
-                                                                            if not error_detected:
-                                                                                try:
-                                                                                    error_divs = login_page.locator("div.zyTWof-gIZMF").all()
-                                                                                    for error_div in error_divs:
-                                                                                        try:
-                                                                                            if error_div.is_visible():
-                                                                                                div_text = error_div.text_content() or ""
-                                                                                                # 检查是否包含错误提示
-                                                                                                if "出了点问题" in div_text and "请稍后再试" in div_text:
-                                                                                                    error_detected = True
-                                                                                                    error_text_found = div_text[:200]
-                                                                                                    print(f"[登录] ⚠ 检测到错误提示元素（div）: {error_text_found}")
-                                                                                                    break
-                                                                                        except:
-                                                                                            continue
-                                                                                except:
-                                                                                    pass
-                                                                            
-                                                                            # 检查是否有成功提示（aside 或 div 中的成功提示）
-                                                                            success_detected = False
-                                                                            success_text_found = ""
-                                                                            
-                                                                            try:
-                                                                                # 检查 aside 元素中的成功提示
-                                                                                aside_elements = login_page.locator("aside.zyTWof-Ng57nc").all()
-                                                                                for aside_elem in aside_elements:
-                                                                                    try:
-                                                                                        if aside_elem.is_visible():
-                                                                                            aside_text = aside_elem.text_content() or ""
-                                                                                            # 检查是否包含成功提示
-                                                                                            if "验证码已发送" in aside_text and "请查收您的邮件" in aside_text:
-                                                                                                success_detected = True
-                                                                                                success_text_found = aside_text[:200]
-                                                                                                print(f"[登录] ✓ 检测到成功提示元素（aside）: {success_text_found}")
-                                                                                                break
-                                                                                    except:
-                                                                                        continue
-                                                                            except:
-                                                                                pass
-                                                                            
-                                                                            if not success_detected:
-                                                                                try:
-                                                                                    success_divs = login_page.locator("div.zyTWof-gIZMF").all()
-                                                                                    for success_div in success_divs:
-                                                                                        try:
-                                                                                            if success_div.is_visible():
-                                                                                                div_text = success_div.text_content() or ""
-                                                                                                # 检查是否包含成功提示
-                                                                                                if "验证码已发送" in div_text and "请查收您的邮件" in div_text:
-                                                                                                    success_detected = True
-                                                                                                    success_text_found = div_text[:200]
-                                                                                                    print(f"[登录] ✓ 检测到成功提示元素（div）: {success_text_found}")
-                                                                                                    break
-                                                                                        except:
-                                                                                            continue
-                                                                                except:
-                                                                                    pass
-                                                                            
-                                                                            # 输出检测结果
-                                                                            if error_detected:
-                                                                                print(f"[登录] ⚠ 检测到页面错误提示，可能的原因：页面显示错误提示，导致验证码邮件未发送成功")
-                                                                                if success_detected:
-                                                                                    print(f"[登录] ⚠ 同时也检测到成功提示，页面状态可能不稳定")
-                                                                            elif success_detected:
-                                                                                print(f"[登录] ✓ 检测到成功提示，验证码邮件应该已发送成功")
-                                                                            else:
-                                                                                print(f"[登录] ℹ 未检测到明显的错误或成功提示元素，页面状态正常")
-                                                                        except Exception as check_e:
-                                                                            print(f"[登录] ⚠ 检查页面状态时出错: {check_e}")
-                                                                        
-                                                                        resend_clicked_ensure = True
-                                                                        resend_already_clicked = True  # 标记已点击
-                                                                        break
-                                                            except:
-                                                                continue
-                                                        
-                                                        if not resend_clicked_ensure:
-                                                            print("[登录] ⚠ 未找到或无法点击重新发送验证码按钮，继续获取验证码...")
-                                                    except Exception as e:
-                                                        print(f"[登录] ⚠ 点击重新发送验证码按钮时出错: {e}，继续获取验证码...")
+                                                # 注意：不再点击"重新发送验证码"按钮
+                                                # 之前的代码会在确认发送成功后再点击一次重新发送，这会触发 Google 的频率限制
+                                                # 导致后续所有的重新发送都失败，无法获取新验证码
                                             else:
                                                 print(f"[登录] ✗ 等待超时（{max_wait_sent}秒），未检测到验证码邮件发送成功的提示（方式1-3均失败）")
                                                 print("[登录] ✗ 验证码可能未发送成功，无法继续")
@@ -3237,24 +3375,24 @@ def _refresh_single_account_internal(account_idx: int, account: dict, headless: 
                             
                             if use_browser_mode:
                                 # 强制使用浏览器方式
-                                code = get_verification_code_from_tempmail_browser(email_page, timeout=120, tempmail_url=tempmail_url, retry_mode=True)
+                                code = get_verification_code_from_tempmail_browser(email_page, timeout=120, tempmail_url=tempmail_url, retry_mode=True, initial_max_mail_id=initial_max_mail_id)
                             elif force_api_mode:
                                 # 强制使用 API 方式（即使失败也不切换到浏览器方式）
-                                code = get_verification_code_from_tempmail(email_page, timeout=120, tempmail_url=tempmail_url, retry_mode=True, account_config=account, force_api=True)
+                                code = get_verification_code_from_tempmail(email_page, timeout=120, tempmail_url=tempmail_url, retry_mode=True, account_config=account, force_api=True, initial_max_mail_id=initial_max_mail_id)
                             else:
                                 # 自动模式：重试模式，立即刷新并提取，不等待
-                                code = get_verification_code_from_tempmail(email_page, timeout=120, tempmail_url=tempmail_url, retry_mode=True, account_config=account, force_api=False)
+                                code = get_verification_code_from_tempmail(email_page, timeout=120, tempmail_url=tempmail_url, retry_mode=True, account_config=account, force_api=False, initial_max_mail_id=initial_max_mail_id)
                         else:
                             # 第一次：等待邮件到达
                             if force_browser_mode:
                                 # 强制使用浏览器方式
-                                code = get_verification_code_from_tempmail_browser(email_page, timeout=120, tempmail_url=tempmail_url, retry_mode=False)
+                                code = get_verification_code_from_tempmail_browser(email_page, timeout=120, tempmail_url=tempmail_url, retry_mode=False, initial_max_mail_id=initial_max_mail_id)
                             elif force_api_mode:
                                 # 强制使用 API 方式
-                                code = get_verification_code_from_tempmail(email_page, timeout=120, tempmail_url=tempmail_url, retry_mode=False, account_config=account, force_api=True)
+                                code = get_verification_code_from_tempmail(email_page, timeout=120, tempmail_url=tempmail_url, retry_mode=False, account_config=account, force_api=True, initial_max_mail_id=initial_max_mail_id)
                             else:
                                 # 自动模式：优先尝试 API 方式
-                                code = get_verification_code_from_tempmail(email_page, timeout=120, tempmail_url=tempmail_url, retry_mode=False, account_config=account, force_api=False)
+                                code = get_verification_code_from_tempmail(email_page, timeout=120, tempmail_url=tempmail_url, retry_mode=False, account_config=account, force_api=False, initial_max_mail_id=initial_max_mail_id)
                         
                         if not code:
                             if retry_count > 0:
@@ -3668,50 +3806,116 @@ def refresh_expired_accounts(headless: bool = None):
     if not accounts:
         print("[批量刷新] ✗ 没有账号")
         return
-    
-    # 找出所有过期的账号
+
+    # 刷新失败后的冷却时间（分钟）
+    RETRY_COOLDOWN_MINUTES = 30
+
+    # 找出所有过期的账号（排除冷却期内的账号）
     expired_accounts = []
+    skipped_accounts = []
     for idx, account in enumerate(accounts):
         if account.get("cookie_expired", False):
+            # 检查是否在冷却期（失败后 30 分钟内）
+            last_failed = account.get("last_refresh_failed_time")
+            if last_failed:
+                try:
+                    failed_time = datetime.fromisoformat(last_failed)
+                    minutes_since_fail = (datetime.now() - failed_time).total_seconds() / 60
+                    if minutes_since_fail < RETRY_COOLDOWN_MINUTES:
+                        remaining = int(RETRY_COOLDOWN_MINUTES - minutes_since_fail)
+                        skipped_accounts.append((idx, remaining))
+                        print(f"[批量刷新] 跳过账号 {idx}: 距上次刷新失败 {int(minutes_since_fail)} 分钟，需等待 {remaining} 分钟后重试")
+                        continue
+                except Exception as e:
+                    # 解析时间失败，忽略冷却期检查
+                    print(f"[批量刷新] ⚠ 账号 {idx} 解析失败时间出错: {e}，忽略冷却期检查")
+
             expired_accounts.append((idx, account))
             print(f"[批量刷新] 发现过期账号 {idx}: csesidx={account.get('csesidx', 'N/A')}, cookie_expired={account.get('cookie_expired')}")
-    
+
+    if skipped_accounts:
+        print(f"[批量刷新] ⏳ 跳过 {len(skipped_accounts)} 个账号（冷却期内）: {[idx for idx, _ in skipped_accounts]}")
+
     if not expired_accounts:
-        print("[批量刷新] ✓ 没有过期的账号（检查了所有账号的 cookie_expired 标记）")
+        if skipped_accounts:
+            print(f"[批量刷新] ⏳ 所有过期账号都在冷却期内，下次检查时将重试")
+        else:
+            print("[批量刷新] ✓ 没有过期的账号（检查了所有账号的 cookie_expired 标记）")
         return
-    
+
     print(f"[批量刷新] 找到 {len(expired_accounts)} 个过期的账号，开始刷新...")
-    
+
     # 使用统一的刷新函数，确保批量模式和手动模式流程一致
     # 直接调用 refresh_single_account，避免重复实现，保证流程完全一致
     success_count = 0
     fail_count = 0
-    
+
+    # 导入 account_manager 用于更新失败时间
+    try:
+        from app.account_manager import account_manager
+        has_account_manager = True
+    except ImportError:
+        has_account_manager = False
+
     for account_idx, account in expired_accounts:
         print("\n" + "="*60)
         print(f"刷新账号 {account_idx} (csesidx: {account.get('csesidx', 'N/A')})")
         print("="*60)
-        
+
         # 直接调用 refresh_single_account，确保流程一致
         try:
             success = refresh_single_account(account_idx, account, headless=headless)
             if success:
                 success_count += 1
                 print(f"[批量刷新] ✓ 账号 {account_idx} 刷新成功")
+                # 刷新成功，清除失败时间
+                if has_account_manager:
+                    try:
+                        with account_manager.lock:
+                            if account_idx < len(account_manager.accounts):
+                                acc = account_manager.accounts[account_idx]
+                                if "last_refresh_failed_time" in acc:
+                                    acc.pop("last_refresh_failed_time", None)
+                                    print(f"[批量刷新] ✓ 账号 {account_idx} 已清除刷新失败冷却标记")
+                        account_manager.save_config()
+                    except Exception as e:
+                        print(f"[批量刷新] ⚠ 清除失败时间时出错: {e}")
             else:
                 fail_count += 1
                 print(f"[批量刷新] ✗ 账号 {account_idx} 刷新失败")
+                # 刷新失败，记录失败时间
+                if has_account_manager:
+                    try:
+                        with account_manager.lock:
+                            if account_idx < len(account_manager.accounts):
+                                acc = account_manager.accounts[account_idx]
+                                acc["last_refresh_failed_time"] = datetime.now().isoformat()
+                                print(f"[批量刷新] ⏳ 账号 {account_idx} 将在 {RETRY_COOLDOWN_MINUTES} 分钟后重试")
+                        account_manager.save_config()
+                    except Exception as e:
+                        print(f"[批量刷新] ⚠ 记录失败时间时出错: {e}")
         except Exception as e:
             fail_count += 1
             print(f"[批量刷新] ✗ 账号 {account_idx} 刷新时发生错误: {e}")
             import traceback
             traceback.print_exc()
-        
+            # 刷新异常，也记录失败时间
+            if has_account_manager:
+                try:
+                    with account_manager.lock:
+                        if account_idx < len(account_manager.accounts):
+                            acc = account_manager.accounts[account_idx]
+                            acc["last_refresh_failed_time"] = datetime.now().isoformat()
+                            print(f"[批量刷新] ⏳ 账号 {account_idx} 将在 {RETRY_COOLDOWN_MINUTES} 分钟后重试")
+                    account_manager.save_config()
+                except Exception as save_e:
+                    print(f"[批量刷新] ⚠ 记录失败时间时出错: {save_e}")
+
         # 等待一下再处理下一个账号，避免请求过快
         if account_idx < len(expired_accounts) - 1:  # 不是最后一个账号
             time.sleep(2)
-    
-    print(f"\n[批量刷新] ✓ 所有账号处理完成（成功: {success_count}, 失败: {fail_count}, 总计: {len(expired_accounts)}）")
+
+    print(f"\n[批量刷新] ✓ 所有账号处理完成（成功: {success_count}, 失败: {fail_count}, 跳过: {len(skipped_accounts)}, 总计: {len(expired_accounts) + len(skipped_accounts)}）")
 
 if __name__ == "__main__":
     import sys
