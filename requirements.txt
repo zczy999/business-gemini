@@ -13,6 +13,7 @@ urllib3>=1.26.0
 
 # Browser Automation (for automatic Cookie refresh)
 playwright>=1.40.0
+playwright-stealth>=1.0.6
 
 # Timezone data (required for zoneinfo on Windows)
 tzdata>=2024.1

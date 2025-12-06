@@ -11,6 +11,7 @@ import random
 from pathlib import Path
 from typing import Optional, Dict
 from urllib.parse import urlparse
+from playwright_stealth import stealth_sync
 
 # 注意：这个脚本需要使用 chrome-mcp 工具
 # 由于无法直接调用 chrome-mcp，这里提供使用 Playwright 的实现
@@ -1990,7 +1991,11 @@ def main():
         # 创建两个标签页：一个用于临时邮箱，一个用于登录
         email_page = context.new_page()
         login_page = context.new_page()
-        
+
+        # 应用 stealth 反检测
+        stealth_sync(email_page)
+        stealth_sync(login_page)
+
         try:
             # 步骤0：选择要使用的临时邮箱 URL
             tempmail_url, tempmail_name = select_tempmail_url()
@@ -2631,7 +2636,11 @@ def _refresh_single_account_internal(account_idx: int, account: dict, headless: 
                 print(f"[登录] 正在创建页面标签...")
                 email_page = context.new_page()
                 login_page = context.new_page()
-                print(f"[登录] ✓ 页面标签已创建")
+
+                # 应用 stealth 反检测
+                stealth_sync(email_page)
+                stealth_sync(login_page)
+                print(f"[登录] ✓ 页面标签已创建（已应用反检测）")
                 
                 try:
                     # 步骤1：获取临时邮箱
