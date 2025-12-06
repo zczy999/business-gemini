@@ -956,7 +956,7 @@ def wait_for_recaptcha_ready(page, timeout: int = 10) -> bool:
     except:
         return False
 
-def wait_for_recaptcha_complete(page, timeout: int = 30) -> bool:
+def wait_for_recaptcha_complete(page, timeout: int = 60) -> bool:
     """等待 reCAPTCHA 验证完成（检查 g-recaptcha-response 是否有值）
     
     Args:
@@ -985,17 +985,18 @@ def wait_for_recaptcha_complete(page, timeout: int = 30) -> bool:
             # 检查是否有可见的 reCAPTCHA 挑战框（如果出现，说明需要用户交互）
             try:
                 # 检查是否有可见的 reCAPTCHA 挑战框（通常是一个较大的 iframe）
-                visible_challenge = page.locator("iframe[src*='recaptcha'][src*='bframe']")
+                # 增加更多的选择器以适应不同的语言和版本
+                visible_challenge = page.locator("iframe[src*='recaptcha'][src*='bframe'], iframe[title*='recaptcha challenge'], iframe[title*='reCAPTCHA'], iframe[title*='recaptcha']")
                 if visible_challenge.count() > 0:
                     # 检查 iframe 是否可见（宽度和高度大于某个阈值）
                     for i in range(visible_challenge.count()):
                         try:
                             box = visible_challenge.nth(i).bounding_box()
                             if box and box['width'] > 100 and box['height'] > 100:
-                                print("[登录] ⚠ 检测到可见的 reCAPTCHA 挑战框，等待用户完成挑战...")
+                                print(f"[登录] ⚠ 检测到可见的 reCAPTCHA 挑战框 (size: {int(box['width'])}x{int(box['height'])})，等待用户完成挑战...")
                                 # 等待挑战框消失（用户完成挑战）
                                 challenge_wait = 0
-                                while challenge_wait < 60:  # 最多等待60秒
+                                while challenge_wait < 120:  # 最多等待120秒（挑战可能很耗时）
                                     try:
                                         box_check = visible_challenge.nth(i).bounding_box()
                                         if not box_check or box_check['width'] < 100 or box_check['height'] < 100:
@@ -1005,6 +1006,8 @@ def wait_for_recaptcha_complete(page, timeout: int = 30) -> bool:
                                         break
                                     page.wait_for_timeout(2000)
                                     challenge_wait += 2
+                                    if challenge_wait % 10 == 0:
+                                        print(f"[登录] 等待用户完成 reCAPTCHA 挑战... (已等待 {challenge_wait} 秒)")
                                 
                                 # 再次检查响应值
                                 try:
@@ -2040,7 +2043,7 @@ def main():
                             print("[登录] ✓ 已点击继续按钮")
                             
                             # 点击后等待 reCAPTCHA 验证完成
-                            wait_for_recaptcha_complete(login_page, timeout=30)
+                            wait_for_recaptcha_complete(login_page, timeout=60)
                             
                             login_page.wait_for_timeout(2000)  # 额外等待2秒让页面响应
                     except:
@@ -2686,7 +2689,7 @@ def _refresh_single_account_internal(account_idx: int, account: dict, headless: 
                                     # print("[登录] ✓ 已点击继续按钮，等待验证码邮件发送...")
                                     
                                     # 点击后等待 reCAPTCHA 验证完成
-                                    wait_for_recaptcha_complete(login_page, timeout=30)
+                                    wait_for_recaptcha_complete(login_page, timeout=60)
                                     
                                     # 等待一下，让页面有时间响应（验证码邮件发送可能需要时间）
                                     login_page.wait_for_timeout(3000)  # 等待3秒
@@ -2711,7 +2714,7 @@ def _refresh_single_account_internal(account_idx: int, account: dict, headless: 
                                     # 等待页面响应和跳转（最多等待 30 秒，网络慢时需要更长时间）
                                     # 调试日志已关闭
                                     # print("[登录] 等待页面跳转到验证码输入页面...")
-                                    max_wait_redirect = 30  # 增加等待时间，适应网络慢的情况
+                                    max_wait_redirect = 60  # 增加等待时间，适应网络慢的情况
                                     waited_redirect = 0
                                     redirect_success = False
                                     
@@ -2772,7 +2775,7 @@ def _refresh_single_account_internal(account_idx: int, account: dict, headless: 
                                             and "accountverification" not in current_url_final):
                                             print(f"[登录] ⚠ 等待跳转超时（{max_wait_redirect}秒），仍在 auth 页面，继续等待跳转到验证码页面...")
                                             # 继续等待，直到跳转到验证码页面（最多再等待 30 秒）
-                                            max_wait_additional = 30
+                                            max_wait_additional = 60
                                             waited_additional = 0
                                             while waited_additional < max_wait_additional:
                                                 current_url_additional = login_page.url
@@ -2834,7 +2837,7 @@ def _refresh_single_account_internal(account_idx: int, account: dict, headless: 
                                             print("[登录] 检查验证码页面的 reCAPTCHA 状态...")
                                             if wait_for_recaptcha_ready(login_page, timeout=5):
                                                 print("[登录] ✓ 检测到验证码页面的 reCAPTCHA iframe，等待 reCAPTCHA 验证完成...")
-                                                wait_for_recaptcha_complete(login_page, timeout=30)
+                                                wait_for_recaptcha_complete(login_page, timeout=60)
                                             else:
                                                 print("[登录] ℹ 验证码页面未检测到 reCAPTCHA，继续等待按钮出现...")
                                             
@@ -2988,7 +2991,7 @@ def _refresh_single_account_internal(account_idx: int, account: dict, headless: 
                                                                                     print(f"[登录] ✓ 已点击重新发送验证码按钮 (选择器: {selector})")
                                                                                     
                                                                                     # 点击后等待 reCAPTCHA 验证完成
-                                                                                    wait_for_recaptcha_complete(login_page, timeout=30)
+                                                                                    wait_for_recaptcha_complete(login_page, timeout=60)
                                                                                     
                                                                                     # 等待页面响应（增加等待时间）
                                                                                     login_page.wait_for_timeout(2000)  # 等待2秒让页面响应
@@ -3430,7 +3433,7 @@ def _refresh_single_account_internal(account_idx: int, account: dict, headless: 
                                             continue_btn.click()
                                             
                                             # 点击后等待 reCAPTCHA 验证完成
-                                            wait_for_recaptcha_complete(login_page, timeout=30)
+                                            wait_for_recaptcha_complete(login_page, timeout=60)
                                             
                                             # 等待页面跳转到验证码页面
                                             login_page.wait_for_timeout(5000)
@@ -3554,7 +3557,7 @@ def _refresh_single_account_internal(account_idx: int, account: dict, headless: 
                                                 print(f"[登录] ✓ 已点击重新发送验证码按钮")
                                                 
                                                 # 点击后等待 reCAPTCHA 验证完成
-                                                wait_for_recaptcha_complete(login_page, timeout=30)
+                                                wait_for_recaptcha_complete(login_page, timeout=60)
                                                 
                                                 # 等待一下让页面响应和邮件发送
                                                 login_page.wait_for_timeout(3000)
