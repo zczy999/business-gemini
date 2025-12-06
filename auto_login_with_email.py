@@ -1992,8 +1992,7 @@ def main():
         email_page = context.new_page()
         login_page = context.new_page()
 
-        # 应用 stealth 反检测
-        stealth_sync(email_page)
+        # 应用 stealth 反检测（只对登录页面应用，临时邮箱页面不需要）
         stealth_sync(login_page)
 
         try:
@@ -2637,8 +2636,7 @@ def _refresh_single_account_internal(account_idx: int, account: dict, headless: 
                 email_page = context.new_page()
                 login_page = context.new_page()
 
-                # 应用 stealth 反检测
-                stealth_sync(email_page)
+                # 应用 stealth 反检测（只对登录页面应用，临时邮箱页面不需要）
                 stealth_sync(login_page)
                 print(f"[登录] ✓ 页面标签已创建（已应用反检测）")
                 
