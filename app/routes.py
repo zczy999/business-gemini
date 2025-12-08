@@ -1186,11 +1186,38 @@ def register_routes(app):
     @app.route('/api/accounts/<int:account_id>', methods=['PUT'])
     @require_admin
     def update_account(account_id):
-        """更新账号"""
-        if account_id < 0 or account_id >= len(account_manager.accounts):
-            return jsonify({"error": "账号不存在"}), 404
-        
+        """更新账号（如果不存在则自动创建，用于远程同步）"""
+        if account_id < 0:
+            return jsonify({"error": "无效的账号ID"}), 400
+
         data = request.json
+
+        # 如果账号不存在，自动创建（填充中间的空位）
+        while account_id >= len(account_manager.accounts):
+            new_account = {
+                "team_id": "",
+                "secure_c_ses": "",
+                "host_c_oses": "",
+                "csesidx": "",
+                "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "available": False,
+                "cookie_expired": True
+            }
+            new_idx = len(account_manager.accounts)
+            account_manager.accounts.append(new_account)
+            account_manager.account_states[new_idx] = {
+                "jwt": None,
+                "jwt_time": 0,
+                "session": None,
+                "available": False,
+                "cooldown_until": None,
+                "cooldown_reason": "",
+                "quota_usage": {},
+                "quota_reset_date": None,
+                "cookie_expired": True
+            }
+            print(f"[远程同步] 自动创建账号 {new_idx}")
+
         acc = account_manager.accounts[account_id]
         
         # team_id 字段：允许设置为空字符串来清空
