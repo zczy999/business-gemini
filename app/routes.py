@@ -2061,9 +2061,11 @@ def register_routes(app):
 
             for i, acc in enumerate(account_manager.accounts):
                 cookie_data = {
+                    "team_id": acc.get("team_id", ""),
                     "secure_c_ses": acc.get("secure_c_ses", ""),
                     "host_c_oses": acc.get("host_c_oses", ""),
                     "csesidx": acc.get("csesidx", ""),
+                    "user_agent": acc.get("user_agent", ""),
                 }
                 if sync_cookie_to_remote(i, cookie_data):
                     synced += 1

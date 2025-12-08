@@ -46,9 +46,11 @@ def sync_cookie_to_remote(account_idx: int, cookie_data: Dict[str, Any]) -> bool
 
     # 准备同步数据
     sync_data = {
+        "team_id": cookie_data.get("team_id", ""),
         "secure_c_ses": cookie_data.get("secure_c_ses", ""),
         "host_c_oses": cookie_data.get("host_c_oses", ""),
         "csesidx": cookie_data.get("csesidx", ""),
+        "user_agent": cookie_data.get("user_agent", ""),
     }
 
     try:
