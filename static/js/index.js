@@ -1552,6 +1552,27 @@
             }
         }
 
+        async function syncAllToRemote() {
+            if (!confirm('确定要将所有账号 Cookie 推送到远程服务器吗？')) return;
+
+            showToast('正在推送...', 'info');
+
+            try {
+                const res = await apiFetch(`${API_BASE}/api/sync-all-to-remote`, {
+                    method: 'POST'
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    showToast(`推送完成: 成功 ${data.synced}/${data.total} 个账号`, 'success');
+                } else {
+                    showToast(data.error || '推送失败', 'error');
+                }
+            } catch (e) {
+                showToast('推送失败: ' + e.message, 'error');
+            }
+        }
+
         async function testRemoteSync() {
             const resultSpan = document.getElementById('remoteSyncTestResult');
             resultSpan.textContent = '测试中...';

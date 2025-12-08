@@ -2016,6 +2016,39 @@ def register_routes(app):
         except Exception as e:
             return jsonify({"success": False, "message": str(e)}), 500
 
+    @app.route('/api/sync-all-to-remote', methods=['POST'])
+    @require_admin
+    def sync_all_to_remote():
+        """将所有账号 Cookie 推送到远程服务器"""
+        try:
+            from .remote_sync import sync_cookie_to_remote, get_remote_sync_config
+
+            sync_config = get_remote_sync_config()
+            if not sync_config["url"]:
+                return jsonify({"success": False, "error": "未配置远程服务器地址"}), 400
+            if not sync_config["api_key"]:
+                return jsonify({"success": False, "error": "未配置远程服务器 API Key"}), 400
+
+            total = len(account_manager.accounts)
+            synced = 0
+
+            for i, acc in enumerate(account_manager.accounts):
+                cookie_data = {
+                    "secure_c_ses": acc.get("secure_c_ses", ""),
+                    "host_c_oses": acc.get("host_c_oses", ""),
+                    "csesidx": acc.get("csesidx", ""),
+                }
+                if sync_cookie_to_remote(i, cookie_data):
+                    synced += 1
+
+            return jsonify({
+                "success": True,
+                "total": total,
+                "synced": synced
+            })
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
     @app.route('/api/config/import', methods=['POST'])
     @require_admin
     def import_config():
