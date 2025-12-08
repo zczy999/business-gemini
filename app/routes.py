@@ -1591,6 +1591,27 @@ def register_routes(app):
 
             print(f"[一键刷新] 批量刷新完成: 成功 {success_count}/{total}, 失败 {failed_count}")
 
+            # 批量刷新完成后，自动同步到远程服务器
+            sync_success = 0
+            try:
+                from .remote_sync import sync_cookie_to_remote, get_remote_sync_config
+                sync_config = get_remote_sync_config()
+                if sync_config.get("url") and sync_config.get("api_key"):
+                    print("[一键刷新] 开始自动同步到远程服务器...")
+                    for i, acc in enumerate(account_manager.accounts):
+                        cookie_data = {
+                            "team_id": acc.get("team_id", ""),
+                            "secure_c_ses": acc.get("secure_c_ses", ""),
+                            "host_c_oses": acc.get("host_c_oses", ""),
+                            "csesidx": acc.get("csesidx", ""),
+                            "user_agent": acc.get("user_agent", ""),
+                        }
+                        if sync_cookie_to_remote(i, cookie_data):
+                            sync_success += 1
+                    print(f"[一键刷新] 远程同步完成: {sync_success}/{total}")
+            except Exception as e:
+                print(f"[一键刷新] 远程同步失败: {e}")
+
             try:
                 emit_notification(
                     "批量刷新完成",

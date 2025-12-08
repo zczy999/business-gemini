@@ -3735,7 +3735,18 @@ def _refresh_single_account_internal(account_idx: int, account: dict, headless: 
                         # 远程同步 Cookie 到服务器
                         try:
                             from app.remote_sync import sync_cookie_to_remote
-                            sync_cookie_to_remote(account_idx, cookies_data)
+                            from app.account_manager import account_manager
+                            # 从账号管理器获取完整数据（包含 user_agent）
+                            with account_manager.lock:
+                                full_account = account_manager.accounts[account_idx]
+                            sync_data = {
+                                "team_id": full_account.get("team_id", ""),
+                                "secure_c_ses": cookies_data.get("secure_c_ses", ""),
+                                "host_c_oses": cookies_data.get("host_c_oses", ""),
+                                "csesidx": cookies_data.get("csesidx", ""),
+                                "user_agent": full_account.get("user_agent", ""),
+                            }
+                            sync_cookie_to_remote(account_idx, sync_data)
                         except Exception as e:
                             # 远程同步失败不影响本地刷新流程
                             print(f"[远程同步] 同步失败: {e}")
