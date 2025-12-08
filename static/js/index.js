@@ -720,6 +720,60 @@
         }
 
         /**
+         * 一键自动刷新所有账号的 Cookie
+         */
+        async function autoRefreshAllAccounts() {
+            if (!confirm('确定要自动刷新所有账号的 Cookie 吗？\n\n注意：这可能需要较长时间（每个账号约1-2分钟）')) {
+                return;
+            }
+
+            showToast('开始批量刷新 Cookie，请等待...', 'info', 5000);
+
+            // 创建 AbortController 用于超时控制（30分钟超时）
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30 * 60 * 1000);
+
+            try {
+                const res = await apiFetch(`${API_BASE}/api/accounts/auto-refresh-all`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+                const data = await res.json();
+
+                if (res.ok && data.success) {
+                    showToast(`批量刷新完成: 成功 ${data.success_count}/${data.total} 个账号`, 'success', 8000);
+                    loadAccounts();
+                } else {
+                    const errorMsg = data.error || '未知错误';
+                    const detailMsg = data.detail || '';
+
+                    if (errorMsg.includes('Playwright') || errorMsg.includes('未安装') || errorMsg.includes('浏览器') || detailMsg.includes('playwright install')) {
+                        const fullMsg = detailMsg ?
+                            `${errorMsg}\n${detailMsg}` :
+                            `${errorMsg}\n请运行: playwright install chromium`;
+                        showToast(fullMsg, 'error', 10000);
+                    } else {
+                        showToast('批量刷新失败: ' + (detailMsg || errorMsg), 'error');
+                    }
+                }
+            } catch (e) {
+                clearTimeout(timeoutId);
+                let errorMsg = e.message || '未知错误';
+
+                if (e.name === 'AbortError' || errorMsg.includes('timeout') || errorMsg.includes('aborted')) {
+                    showToast('批量刷新超时（超过30分钟），请检查后台日志', 'error', 10000);
+                } else if (errorMsg.includes('Playwright') || errorMsg.includes('未安装') || errorMsg.includes('浏览器')) {
+                    showToast(`批量刷新失败: ${errorMsg}\n请运行: playwright install chromium`, 'error', 10000);
+                } else {
+                    showToast('批量刷新失败: ' + errorMsg, 'error');
+                }
+            }
+        }
+
+        /**
          * 从JSON解析并填充刷新Cookie表单
          * @param {string} text - JSON字符串
          */

@@ -1516,7 +1516,112 @@ def register_routes(app):
                 "error": "自动刷新失败",
                 "detail": f"刷新过程出错: {str(e)}"
             }), 500
-    
+
+    @app.route('/api/accounts/auto-refresh-all', methods=['POST'])
+    @require_admin
+    def auto_refresh_all_accounts_route():
+        """一键自动刷新所有账号的 Cookie"""
+        if not PLAYWRIGHT_AVAILABLE:
+            return jsonify({
+                "error": "Playwright 未安装，无法自动刷新",
+                "detail": "请先安装 Playwright: pip install playwright && playwright install chromium"
+            }), 400
+
+        if not PLAYWRIGHT_BROWSER_INSTALLED:
+            return jsonify({
+                "error": "Playwright 浏览器未安装",
+                "detail": "请运行命令安装浏览器: playwright install chromium"
+            }), 400
+
+        if len(account_manager.accounts) == 0:
+            return jsonify({"error": "没有可刷新的账号"}), 400
+
+        print(f"[一键刷新] 开始批量刷新所有 {len(account_manager.accounts)} 个账号的 Cookie...")
+
+        try:
+            import sys
+            from pathlib import Path
+            # 添加项目根目录到路径
+            project_root = Path(__file__).parent.parent
+            if str(project_root) not in sys.path:
+                sys.path.insert(0, str(project_root))
+
+            from auto_login_with_email import refresh_single_account
+            from .cookie_refresh import _get_headless_mode
+
+            use_headless = _get_headless_mode()
+
+            total = len(account_manager.accounts)
+            success_count = 0
+            failed_count = 0
+
+            for idx, acc in enumerate(account_manager.accounts):
+                print(f"[一键刷新] 正在刷新账号 {idx + 1}/{total}...")
+                try:
+                    emit_cookie_refresh_progress(idx, "start", f"开始刷新账号 {idx + 1}/{total}...", idx / total)
+                except:
+                    pass
+
+                try:
+                    success = refresh_single_account(idx, acc, headless=use_headless)
+                    if success:
+                        success_count += 1
+                        print(f"[一键刷新] 账号 {idx} 刷新成功")
+                        try:
+                            emit_cookie_refresh_progress(idx, "success", f"账号 {idx} 刷新成功", (idx + 1) / total)
+                        except:
+                            pass
+                    else:
+                        failed_count += 1
+                        print(f"[一键刷新] 账号 {idx} 刷新失败")
+                        try:
+                            emit_cookie_refresh_progress(idx, "error", f"账号 {idx} 刷新失败", None)
+                        except:
+                            pass
+                except Exception as e:
+                    failed_count += 1
+                    print(f"[一键刷新] 账号 {idx} 刷新出错: {e}")
+                    try:
+                        emit_cookie_refresh_progress(idx, "error", f"账号 {idx} 刷新出错: {str(e)}", None)
+                    except:
+                        pass
+
+            # 重新加载配置
+            account_manager.load_config()
+
+            print(f"[一键刷新] 批量刷新完成: 成功 {success_count}/{total}, 失败 {failed_count}")
+
+            try:
+                emit_notification(
+                    "批量刷新完成",
+                    f"成功 {success_count}/{total} 个账号" + (f"，失败 {failed_count} 个" if failed_count > 0 else ""),
+                    "success" if failed_count == 0 else "warning"
+                )
+            except:
+                pass
+
+            return jsonify({
+                "success": True,
+                "total": total,
+                "success_count": success_count,
+                "failed_count": failed_count
+            })
+
+        except ImportError as e:
+            return jsonify({
+                "error": "导入刷新模块失败",
+                "detail": f"请确保 auto_login_with_email.py 文件存在: {str(e)}"
+            }), 500
+        except Exception as e:
+            error_msg = str(e)
+            print(f"[一键刷新] 批量刷新出错: {error_msg}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                "error": "批量刷新过程出错",
+                "detail": error_msg
+            }), 500
+
     @app.route('/api/accounts/<int:account_id>/test', methods=['GET'])
     @require_admin
     def test_account(account_id):
