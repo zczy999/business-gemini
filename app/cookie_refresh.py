@@ -24,6 +24,42 @@ _auto_refresh_thread_started = False
 _auto_refresh_thread_lock = threading.Lock()
 
 
+def _get_headless_mode() -> bool:
+    """
+    获取浏览器 headless 模式设置
+    优先级: FORCE_HEADED > FORCE_HEADLESS > 系统默认
+    返回: True 表示无头模式，False 表示有头模式
+    """
+    import sys
+
+    force_headed = os.environ.get('FORCE_HEADED') == '1'
+    force_headless = os.environ.get('FORCE_HEADLESS') == '1'
+
+    if force_headed:
+        result = False  # 强制有头模式
+        print(f"[Headless] FORCE_HEADED=1, 使用有头模式")
+    elif force_headless:
+        result = True  # 强制无头模式
+        print(f"[Headless] FORCE_HEADLESS=1, 使用无头模式")
+    else:
+        # 根据操作系统决定默认值
+        if sys.platform == 'darwin':
+            # macOS: 默认有头模式
+            result = False
+            print(f"[Headless] macOS 默认有头模式")
+        elif sys.platform.startswith('linux'):
+            # Linux: 根据 DISPLAY 环境变量决定
+            has_display = bool(os.environ.get('DISPLAY'))
+            result = not has_display
+            print(f"[Headless] Linux DISPLAY={os.environ.get('DISPLAY')}, headless={result}")
+        else:
+            # Windows 等其他系统: 默认无头模式
+            result = True
+            print(f"[Headless] {sys.platform} 默认无头模式")
+
+    return result
+
+
 def start_auto_refresh_thread():
     """
     动态启动自动刷新线程（用于配置更新后启动）
@@ -53,25 +89,34 @@ def start_auto_refresh_thread():
         return True
 
 
-def refresh_cookie_with_browser(account: dict, proxy: Optional[str] = None) -> Optional[Dict[str, str]]:
+def refresh_cookie_with_browser(account: dict, proxy: Optional[str] = None, headless: Optional[bool] = None) -> Optional[Dict[str, str]]:
     """
     使用 Playwright 自动化浏览器刷新 Cookie
+
+    参数:
+        account: 账号信息
+        proxy: 代理设置
+        headless: 是否使用无头模式，None 表示从环境变量读取
     返回: {"secure_c_ses": "...", "host_c_oses": "...", "csesidx": "..."} 或 None
     """
     if not PLAYWRIGHT_AVAILABLE:
         print("[!] Playwright 未安装，无法自动刷新 Cookie")
         return None
-    
+
     if not PLAYWRIGHT_BROWSER_INSTALLED:
         print("[!] Playwright 浏览器未安装，请运行: playwright install chromium")
         return None
-    
+
+    # 如果未指定 headless，从环境变量读取
+    if headless is None:
+        headless = _get_headless_mode()
+
     try:
         with sync_playwright() as p:
             # 启动浏览器
             try:
                 browser = p.chromium.launch(
-                    headless=True,
+                    headless=headless,
                     args=['--no-sandbox', '--disable-setuid-sandbox'] if os.name != 'nt' else []
                 )
             except Exception as e:
@@ -745,16 +790,26 @@ def auto_refresh_account_cookie(account_idx: int, account: dict) -> bool:
         return False
 
 
-def maintain_browser_session(account_idx: int, account: dict, proxy: Optional[str] = None):
+def maintain_browser_session(account_idx: int, account: dict, proxy: Optional[str] = None, headless: Optional[bool] = None):
     """
     为指定账号维护一个持续运行的浏览器会话
     每 1 小时刷新一次页面以保持登录状态，然后提取 Cookie 和 csesidx
+
+    参数:
+        account_idx: 账号索引
+        account: 账号信息
+        proxy: 代理设置
+        headless: 是否使用无头模式，None 表示从环境变量读取
     """
     if not PLAYWRIGHT_AVAILABLE or not PLAYWRIGHT_BROWSER_INSTALLED:
         return
-    
+
+    # 如果未指定 headless，从环境变量读取
+    if headless is None:
+        headless = _get_headless_mode()
+
     REFRESH_INTERVAL = 1 * 3600  # 1 小时刷新一次
-    
+
     try:
         # 在启动浏览器前，从 account_manager 获取最新的账号信息（可能已被手动刷新）
         with account_manager.lock:
@@ -763,11 +818,11 @@ def maintain_browser_session(account_idx: int, account: dict, proxy: Optional[st
             else:
                 print(f"[浏览器会话] 账号 {account_idx}: 账号不存在，退出")
                 return
-        
+
         with sync_playwright() as p:
             # 启动浏览器
             browser = p.chromium.launch(
-                headless=True,
+                headless=headless,
                 args=['--no-sandbox', '--disable-setuid-sandbox'] if os.name != 'nt' else []
             )
             
@@ -1558,20 +1613,10 @@ def auto_refresh_expired_cookies_worker():
                     sys.path.insert(0, str(project_root))
                 
                 from auto_login_with_email import refresh_expired_accounts
-                
-                # 检查是否强制使用无头/有头模式（通过环境变量）
-                import os
-                force_headless = os.environ.get('FORCE_HEADLESS') == '1'
-                force_headed = os.environ.get('FORCE_HEADED') == '1'
-                
-                # 确定 headless 模式
-                if force_headed:
-                    use_headless = False  # 强制有头模式
-                elif force_headless:
-                    use_headless = True  # 强制无头模式
-                else:
-                    use_headless = True  # 默认无头模式（后台线程）
-                
+
+                # 使用统一的辅助函数获取 headless 模式
+                use_headless = _get_headless_mode()
+
                 refresh_expired_accounts(headless=use_headless)
                 
                 print("[Cookie 自动刷新] 批量刷新完成")

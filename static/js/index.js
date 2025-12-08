@@ -672,7 +672,7 @@
                 const res = await apiFetch(`${API_BASE}/api/accounts/${id}/auto-refresh-cookie`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ headless: true }),  // 使用无头模式
+                    body: JSON.stringify({}),  // 让后端自动检测 headless 模式
                     signal: controller.signal
                 });
                 

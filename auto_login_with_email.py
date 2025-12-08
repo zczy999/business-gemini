@@ -1731,16 +1731,18 @@ def main():
     import os
     import sys
     from playwright.sync_api import sync_playwright
-    
+
     # 自动检测是否应该使用无头模式
-    # 1. 检查命令行参数 --headless
-    # 2. 检查是否有 DISPLAY 环境变量（Linux/Unix）
-    # 3. 检查是否在 Windows（通常有图形界面）
-    use_headless = True
+    # 1. 检查命令行参数 --headless / --headed
+    # 2. 检查是否有 DISPLAY 环境变量（仅 Linux）
+    # 3. macOS 默认有图形界面
+    use_headless = False  # 默认有头模式
     if "--headless" in sys.argv:
         use_headless = True
-    elif os.name != "nt":  # 非 Windows 系统
-        # Linux/Unix: 检查是否有 DISPLAY 环境变量
+    elif "--headed" in sys.argv:
+        use_headless = False
+    elif sys.platform.startswith('linux'):
+        # Linux: 检查是否有 DISPLAY 环境变量
         if not os.environ.get("DISPLAY"):
             use_headless = True
             print("[提示] 未检测到 DISPLAY 环境变量，将使用无头模式")
@@ -2355,10 +2357,11 @@ def _refresh_single_account_internal(account_idx: int, account: dict, headless: 
         bool: 是否刷新成功
     """
     import os
-    
-    # 如果 headless 参数为 True，但系统有图形界面，可以提示
-    # 如果 headless 参数为 False，但系统无图形界面，自动切换为无头模式
-    if not headless and os.name != "nt":  # 非 Windows 系统
+    import sys
+
+    # 只在 Linux 系统上检测 DISPLAY 环境变量（macOS 不使用 X11）
+    # 如果 headless 参数为 False，但 Linux 系统无图形界面，自动切换为无头模式
+    if not headless and sys.platform.startswith('linux'):
         if not os.environ.get("DISPLAY"):
             print("[提示] 未检测到 DISPLAY 环境变量，将使用无头模式")
             headless = True
@@ -2388,7 +2391,9 @@ def _refresh_single_account_internal(account_idx: int, account: dict, headless: 
         # 使用 Playwright 刷新
         import os
         from playwright.sync_api import sync_playwright
-        
+
+        # 调试日志：显示实际的 headless 模式
+        print(f"[登录] 浏览器模式: {'无头模式' if headless else '有头模式(可视化)'}")
         print(f"[登录] 正在启动浏览器...")
         with sync_playwright() as p:
             # Linux 系统需要添加额外的启动参数
@@ -3753,19 +3758,23 @@ def _refresh_single_account_internal(account_idx: int, account: dict, headless: 
 
 def refresh_expired_accounts(headless: bool = None):
     """批量刷新过期的 Cookie
-    
+
     Args:
-        headless: 是否使用无头模式。如果为 None，则自动检测（Linux 无图形界面时自动使用无头模式）
+        headless: 是否使用无头模式。如果为 None，则自动检测（仅 Linux 无图形界面时自动使用无头模式）
     """
     import os
-    
+    import sys
+
     # 如果未指定 headless，自动检测
     if headless is None:
-        if os.name != "nt":  # 非 Windows 系统
-            # Linux/Unix: 检查是否有 DISPLAY 环境变量
+        if sys.platform.startswith('linux'):
+            # Linux: 检查是否有 DISPLAY 环境变量
             headless = not bool(os.environ.get("DISPLAY"))
+        elif sys.platform == 'darwin':
+            # macOS: 默认有图形界面，使用有头模式
+            headless = False
         else:
-            # Windows: 默认使用无头模式
+            # Windows 等其他系统: 默认使用无头模式
             headless = True
     
     # 优先尝试从 account_manager 的内存中读取（包含 cookie_expired 标记）

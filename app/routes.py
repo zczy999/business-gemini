@@ -1404,13 +1404,19 @@ def register_routes(app):
                 sys.path.insert(0, str(project_root))
             
             from auto_login_with_email import refresh_single_account
-            
-            # 调用单个账号刷新函数（无头模式）
-            # 从请求参数中获取 headless 设置
-            # Windows 默认使用有头模式（False），方便调试和查看过程
-            # Linux 服务器可以传递 headless=true 使用无头模式
+
+            # 调用单个账号刷新函数
+            # 从请求参数或环境变量获取 headless 设置
             data = request.json or {}
-            use_headless = data.get("headless", True)  # 默认 True（无头模式）
+            print(f"[DEBUG] 请求数据: {data}")
+            if "headless" in data:
+                use_headless = data.get("headless")
+                print(f"[DEBUG] 从请求中获取 headless={use_headless}")
+            else:
+                # 从环境变量读取默认值
+                from .cookie_refresh import _get_headless_mode
+                use_headless = _get_headless_mode()
+                print(f"[DEBUG] 从 _get_headless_mode() 获取 headless={use_headless}")
             success = refresh_single_account(account_id, acc, headless=use_headless)
             
             if success:

@@ -180,20 +180,21 @@ if __name__ == '__main__':
     
     if not account_manager.accounts:
         print("[!] 警告: 没有配置任何账号")
-    
+
+    # 设置 headless/headed 环境变量（无论自动刷新是否启用，手动刷新也需要）
+    import os
+    if args.headless:
+        os.environ['FORCE_HEADLESS'] = '1'
+        os.environ.pop('FORCE_HEADED', None)
+        print("[✓] 已启用强制无头模式（--headless）")
+    elif args.headed:
+        os.environ['FORCE_HEADED'] = '1'
+        os.environ.pop('FORCE_HEADLESS', None)
+        print("[✓] 已启用强制有头模式（--headed）")
+
     # 启动 Cookie 自动刷新后台线程（使用临时邮箱方式）
     auto_refresh_enabled = account_manager.config.get("auto_refresh_cookie", False)
     if auto_refresh_enabled and PLAYWRIGHT_AVAILABLE:
-        # 将 headless/headed 参数传递给自动刷新线程
-        import os
-        if args.headless:
-            os.environ['FORCE_HEADLESS'] = '1'
-            os.environ.pop('FORCE_HEADED', None)  # 清除 headed 标志
-            print("[✓] 已启用强制无头模式（--headless）")
-        elif args.headed:
-            os.environ['FORCE_HEADED'] = '1'
-            os.environ.pop('FORCE_HEADLESS', None)  # 清除 headless 标志
-            print("[✓] 已启用强制有头模式（--headed）")
         # 启动临时邮箱自动刷新线程（每30分钟检查过期 Cookie 并使用临时邮箱刷新）
         expired_refresh_thread = threading.Thread(target=auto_refresh_expired_cookies_worker, daemon=True)
         expired_refresh_thread.start()
