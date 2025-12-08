@@ -321,7 +321,14 @@ class AccountManager:
                             quota_reset_date=None,  # 保留字段用于向后兼容
                         )
                         db.add(account)
-                
+
+                # 删除数据库中多余的账号（ID 大于当前账号数量的）
+                if self.accounts:
+                    db.query(Account).filter(Account.id > len(self.accounts)).delete()
+                else:
+                    # 如果账号列表为空，删除所有账号
+                    db.query(Account).delete()
+
                 # 保存模型
                 models = self.config.get("models", [])
                 for model_data in models:

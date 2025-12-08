@@ -616,7 +616,8 @@
             if (!confirm('确定要删除这个账号吗？')) return;
             try {
                 const res = await apiFetch(`${API_BASE}/api/accounts/${id}`, { method: 'DELETE' });
-                if (!res.ok) throw new Error((await res.json()).detail);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || data.detail || '删除失败');
                 showToast('账号删除成功!', 'success');
                 loadAccounts();
             } catch (e) {
