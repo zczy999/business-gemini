@@ -192,13 +192,20 @@ if __name__ == '__main__':
         os.environ.pop('FORCE_HEADLESS', None)
         print("[✓] 已启用强制有头模式（--headed）")
 
+    # 检查是否为"只接收同步"模式
+    sync_only_mode = account_manager.config.get("sync_only_mode", False)
+    if sync_only_mode:
+        print("[✓] 只接收同步模式已启用（不主动刷新 Cookie，只接受远程推送）")
+
     # 启动 Cookie 自动刷新后台线程（使用临时邮箱方式）
     auto_refresh_enabled = account_manager.config.get("auto_refresh_cookie", False)
-    if auto_refresh_enabled and PLAYWRIGHT_AVAILABLE:
+    if auto_refresh_enabled and PLAYWRIGHT_AVAILABLE and not sync_only_mode:
         # 启动临时邮箱自动刷新线程（每30分钟检查过期 Cookie 并使用临时邮箱刷新）
         expired_refresh_thread = threading.Thread(target=auto_refresh_expired_cookies_worker, daemon=True)
         expired_refresh_thread.start()
         print("[✓] Cookie 自动刷新功能已启用（每30分钟检查一次过期 Cookie，使用临时邮箱自动刷新）")
+    elif auto_refresh_enabled and sync_only_mode:
+        print("[!] 提示: 自动刷新已启用但被只接收同步模式覆盖")
     elif auto_refresh_enabled and not PLAYWRIGHT_AVAILABLE:
         print("[!] 警告: 配置启用了自动刷新 Cookie，但 Playwright 未安装")
         print("    安装命令: pip install playwright && playwright install chromium")

@@ -1264,7 +1264,27 @@ def register_routes(app):
                         print(f"[Cookie 自动刷新] ⚡ 账号 {account_id} Cookie 已清空，已触发立即刷新检查")
                 except (ImportError, AttributeError):
                     pass
-        
+        else:
+            # Cookie 有效，清除过期标记并恢复账号状态（用于接收远程同步）
+            cookie_was_expired = acc.get("cookie_expired", False)
+            if cookie_was_expired:
+                acc["cookie_expired"] = False
+                acc.pop("cookie_expired_time", None)
+                state = account_manager.account_states.get(account_id, {})
+                state["cookie_expired"] = False
+                # 恢复账号可用
+                acc["available"] = True
+                state["available"] = True
+                acc.pop("unavailable_reason", None)
+                acc.pop("unavailable_time", None)
+                # 清除 JWT 缓存，强制重新获取
+                state["jwt"] = None
+                state["jwt_time"] = 0
+                # 清除冷却状态
+                state["cooldown_until"] = None
+                state["cooldown_reason"] = ""
+                print(f"[远程同步] ✓ 账号 {account_id} 收到有效 Cookie，已恢复可用状态")
+
         account_manager.config["accounts"] = account_manager.accounts
         account_manager.save_config()
         

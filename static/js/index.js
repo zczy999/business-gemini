@@ -1048,6 +1048,8 @@
                 document.getElementById('imageBaseUrl').value = configData.image_base_url || '';
                 document.getElementById('tempmailWorkerUrl').value = configData.tempmail_worker_url || '';
                 document.getElementById('autoRefreshCookie').checked = configData.auto_refresh_cookie || false;
+                document.getElementById('syncOnlyMode').checked = configData.sync_only_mode || false;
+                document.getElementById('localAdminKey').value = configData.admin_key || '(未设置)';
                 document.getElementById('remoteSyncUrl').value = configData.remote_sync_url || '';
                 document.getElementById('remoteSyncApiKey').value = configData.remote_sync_api_key || '';
                 document.getElementById('configJson').value = JSON.stringify(configData, null, 2);
@@ -1094,6 +1096,37 @@
                 statusDiv.style.background = 'var(--success-light)';
             } else {
                 statusDiv.style.display = 'none';
+            }
+        }
+
+        async function toggleSyncOnlyMode() {
+            const enabled = document.getElementById('syncOnlyMode').checked;
+            try {
+                const res = await apiFetch(`${API_BASE}/api/config`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sync_only_mode: enabled })
+                });
+                if (!res.ok) {
+                    throw new Error('保存失败');
+                }
+                showToast(enabled ? '已启用只接收同步模式（需重启服务生效）' : '已禁用只接收同步模式（需重启服务生效）', 'success');
+            } catch (e) {
+                showToast('设置失败: ' + e.message, 'error');
+                document.getElementById('syncOnlyMode').checked = !enabled;
+            }
+        }
+
+        function copyAdminKey() {
+            const adminKey = document.getElementById('localAdminKey').value;
+            if (adminKey && adminKey !== '(未设置)') {
+                navigator.clipboard.writeText(adminKey).then(() => {
+                    showToast('管理员 Key 已复制到剪贴板', 'success');
+                }).catch(() => {
+                    showToast('复制失败', 'error');
+                });
+            } else {
+                showToast('管理员 Key 未设置', 'error');
             }
         }
 

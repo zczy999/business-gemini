@@ -299,6 +299,30 @@
                         <div class="settings-section">
                             <h3>远程同步</h3>
                             <div class="form-group">
+                                <div style="display: flex; align-items: center; gap: 16px; padding: 16px; background: var(--card-bg); border: 2px solid var(--border); border-radius: var(--radius-md); margin-bottom: 16px;">
+                                    <div style="flex: 1;">
+                                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                                            <svg class="icon" style="width: 20px; height: 20px; color: var(--warning);"><use xlink:href="#icon-server"></use></svg>
+                                            <label style="font-size: 16px; font-weight: 600; color: var(--text-main); cursor: pointer; margin: 0;" for="syncOnlyMode">只接收同步模式</label>
+                                        </div>
+                                        <small style="display: block; color: var(--text-muted); margin-left: 32px;">启用后，服务器不主动刷新 Cookie，只接受其他设备推送的 Cookie 更新（适用于服务器端部署）</small>
+                                    </div>
+                                    <label class="toggle-switch" for="syncOnlyMode" style="position: relative; display: inline-block; width: 56px; height: 32px; cursor: pointer; flex-shrink: 0;">
+                                        <input type="checkbox" id="syncOnlyMode" onchange="toggleSyncOnlyMode()" style="opacity: 0; width: 0; height: 0;">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">本机管理员 Key（供其他设备同步使用）</label>
+                                <div style="display: flex; gap: 8px;">
+                                    <input type="text" class="form-input" id="localAdminKey" readonly style="font-family: monospace;">
+                                    <button class="btn btn-outline" onclick="copyAdminKey()">复制</button>
+                                </div>
+                                <small style="display: block; color: var(--text-muted); margin-top: 8px;">其他设备配置远程同步时，填写此 Key 作为 API Key</small>
+                            </div>
+                            <hr style="border: none; border-top: 1px solid var(--border); margin: 16px 0;">
+                            <div class="form-group">
                                 <small style="display: block; color: var(--text-muted); margin-bottom: 12px;">配置后，本地刷新 Cookie 成功时会自动同步到远程服务器</small>
                                 <label class="form-label" for="remoteSyncUrl">远程服务器地址</label>
                                 <input type="text" class="form-input" id="remoteSyncUrl" placeholder="https://your-server.com">
