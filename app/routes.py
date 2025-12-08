@@ -1792,7 +1792,11 @@ def register_routes(app):
         config["accounts"] = account_manager.accounts
         # 移除已废弃的字段
         config.pop("api_tokens", None)  # 已废弃，使用新的 API 密钥管理系统
-        
+
+        # 添加 admin_key（供远程同步使用，映射自 admin_secret_key）
+        from .auth import get_admin_secret_key
+        config["admin_key"] = get_admin_secret_key()
+
         return jsonify(config)
     
     @app.route('/api/config', methods=['PUT'])
