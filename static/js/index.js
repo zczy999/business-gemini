@@ -1048,6 +1048,8 @@
                 document.getElementById('imageBaseUrl').value = configData.image_base_url || '';
                 document.getElementById('tempmailWorkerUrl').value = configData.tempmail_worker_url || '';
                 document.getElementById('autoRefreshCookie').checked = configData.auto_refresh_cookie || false;
+                document.getElementById('remoteSyncUrl').value = configData.remote_sync_url || '';
+                document.getElementById('remoteSyncApiKey').value = configData.remote_sync_api_key || '';
                 document.getElementById('configJson').value = JSON.stringify(configData, null, 2);
                 
                 // 更新服务信息（动态获取）
@@ -1491,6 +1493,8 @@
             const uploadApiToken = document.getElementById('uploadApiToken').value;
             const imageBaseUrl = document.getElementById('imageBaseUrl').value;
             const tempmailWorkerUrl = document.getElementById('tempmailWorkerUrl').value;
+            const remoteSyncUrl = document.getElementById('remoteSyncUrl').value;
+            const remoteSyncApiKey = document.getElementById('remoteSyncApiKey').value;
             try {
                 const res = await apiFetch(`${API_BASE}/api/config`, {
                     method: 'PUT',
@@ -1501,7 +1505,9 @@
                         upload_endpoint: uploadEndpoint,
                         upload_api_token: uploadApiToken,
                         image_base_url: imageBaseUrl,
-                        tempmail_worker_url: tempmailWorkerUrl
+                        tempmail_worker_url: tempmailWorkerUrl,
+                        remote_sync_url: remoteSyncUrl,
+                        remote_sync_api_key: remoteSyncApiKey
                     })
                 });
                 if (!res.ok) throw new Error((await res.json()).detail);
@@ -1509,6 +1515,51 @@
                 loadConfig();
             } catch (e) {
                 showToast('保存失败: ' + e.message, 'error');
+            }
+        }
+
+        async function testRemoteSync() {
+            const resultSpan = document.getElementById('remoteSyncTestResult');
+            resultSpan.textContent = '测试中...';
+            resultSpan.style.color = 'var(--text-muted)';
+
+            // 先保存配置
+            const remoteSyncUrl = document.getElementById('remoteSyncUrl').value;
+            const remoteSyncApiKey = document.getElementById('remoteSyncApiKey').value;
+
+            if (!remoteSyncUrl) {
+                resultSpan.textContent = '请先填写服务器地址';
+                resultSpan.style.color = 'var(--danger)';
+                return;
+            }
+
+            try {
+                // 先保存配置
+                await apiFetch(`${API_BASE}/api/config`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        remote_sync_url: remoteSyncUrl,
+                        remote_sync_api_key: remoteSyncApiKey
+                    })
+                });
+
+                // 测试连接
+                const res = await apiFetch(`${API_BASE}/api/config/test-remote-sync`, {
+                    method: 'POST'
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    resultSpan.textContent = '连接成功';
+                    resultSpan.style.color = 'var(--success)';
+                } else {
+                    resultSpan.textContent = data.message || '连接失败';
+                    resultSpan.style.color = 'var(--danger)';
+                }
+            } catch (e) {
+                resultSpan.textContent = '测试失败: ' + e.message;
+                resultSpan.style.color = 'var(--danger)';
             }
         }
 

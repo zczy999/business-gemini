@@ -3720,7 +3720,7 @@ def _refresh_single_account_internal(account_idx: int, account: dict, headless: 
                         print(f"[单个账号刷新] ✓ 账号 {account_idx} Cookie 验证成功")
                         # 保存到配置文件（更新现有账号）
                         save_to_config(cookies_data, account_index=account_idx, tempmail_name=tempmail_name)
-                        
+
                         # 推送 WebSocket 更新事件，让前端及时刷新显示
                         try:
                             from app.websocket_manager import emit_account_update
@@ -3731,7 +3731,15 @@ def _refresh_single_account_internal(account_idx: int, account: dict, headless: 
                         except Exception as e:
                             # WebSocket 推送失败不影响刷新流程
                             pass
-                        
+
+                        # 远程同步 Cookie 到服务器
+                        try:
+                            from app.remote_sync import sync_cookie_to_remote
+                            sync_cookie_to_remote(account_idx, cookies_data)
+                        except Exception as e:
+                            # 远程同步失败不影响本地刷新流程
+                            print(f"[远程同步] 同步失败: {e}")
+
                         print(f"[单个账号刷新] ✓ 账号 {account_idx} 刷新完成")
                         return True
                     else:

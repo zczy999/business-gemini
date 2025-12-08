@@ -1974,7 +1974,18 @@ def register_routes(app):
             return jsonify({"success": True, **result})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
-    
+
+    @app.route('/api/config/test-remote-sync', methods=['POST'])
+    @require_admin
+    def test_remote_sync():
+        """测试远程同步连接"""
+        try:
+            from .remote_sync import test_remote_connection
+            result = test_remote_connection()
+            return jsonify(result)
+        except Exception as e:
+            return jsonify({"success": False, "message": str(e)}), 500
+
     @app.route('/api/config/import', methods=['POST'])
     @require_admin
     def import_config():
