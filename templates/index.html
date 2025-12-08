@@ -36,7 +36,7 @@
             <div class="header-left">
                 <div class="logo">G</div>
                 <h1>Business Gemini Pool <span>管理控制台</span></h1>
-                <span id="serverModeBadge" class="server-mode-badge" style="display: none;">服务器模式</span>
+                <span id="serverModeBadge" class="server-mode-badge" style="display: {{ 'inline-flex' if sync_only_mode else 'none' }};">服务器模式</span>
             </div>
             <div class="header-right">
                 <div class="status-indicator" id="serviceStatus">服务运行中</div>

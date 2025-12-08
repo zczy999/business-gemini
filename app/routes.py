@@ -994,7 +994,7 @@ def register_routes(app):
         """返回管理页面（需要登录）"""
         if not is_admin_authenticated():
             return redirect('/login')
-        return render_template('index.html')
+        return render_template('index.html', sync_only_mode=account_manager.config.get("sync_only_mode", False))
     
     @app.route('/login')
     def login_page():
