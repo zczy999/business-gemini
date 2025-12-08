@@ -195,7 +195,7 @@ if __name__ == '__main__':
     # 检查是否为"只接收同步"模式
     sync_only_mode = account_manager.config.get("sync_only_mode", False)
     if sync_only_mode:
-        print("[✓] 只接收同步模式已启用（不主动刷新 Cookie，只接受远程推送）")
+        print("[✓] 服务器模式已启用（sync_only_mode=true，不主动刷新 Cookie，只接受远程推送）")
 
     # 启动 Cookie 自动刷新后台线程（使用临时邮箱方式）
     auto_refresh_enabled = account_manager.config.get("auto_refresh_cookie", False)

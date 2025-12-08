@@ -1104,6 +1104,11 @@
                 document.getElementById('tempmailWorkerUrl').value = configData.tempmail_worker_url || '';
                 document.getElementById('autoRefreshCookie').checked = configData.auto_refresh_cookie || false;
                 document.getElementById('syncOnlyMode').checked = configData.sync_only_mode || false;
+                // 显示/隐藏服务器模式标识
+                const serverModeBadge = document.getElementById('serverModeBadge');
+                if (serverModeBadge) {
+                    serverModeBadge.style.display = configData.sync_only_mode ? 'inline-flex' : 'none';
+                }
                 document.getElementById('localAdminKey').value = configData.admin_key || '(未设置)';
                 document.getElementById('remoteSyncUrl').value = configData.remote_sync_url || '';
                 document.getElementById('remoteSyncApiKey').value = configData.remote_sync_api_key || '';
