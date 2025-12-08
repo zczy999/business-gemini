@@ -204,6 +204,173 @@ sudo firewall-cmd --permanent --add-port=8000/tcp
 sudo firewall-cmd --reload
 ```
 
+## 🖥️ Cookie 自动刷新模式配置
+
+Cookie 自动刷新功能使用 Playwright 浏览器执行登录流程。根据运行环境不同，需要配置合适的浏览器模式。
+
+### 模式说明
+
+| 模式 | 说明 | 适用场景 |
+|------|------|----------|
+| **有头模式** | 浏览器可视化运行，能看到操作界面 | macOS 本地开发、调试问题 |
+| **无头模式** | 浏览器后台运行，无界面 | Linux 服务器、Docker 容器 |
+
+### macOS 本地开发
+
+macOS 默认使用**有头模式**（可视化），无需额外配置：
+
+```bash
+# 直接启动，默认有头模式
+python gemini.py
+
+# 如需强制无头模式（例如后台运行）
+python gemini.py --headless
+```
+
+### Linux 服务器部署
+
+Linux 系统会**自动检测**是否有图形界面（通过 `DISPLAY` 环境变量）：
+
+- 有图形界面（`DISPLAY` 有值）→ 使用有头模式
+- 无图形界面（`DISPLAY` 为空）→ 使用无头模式
+
+```bash
+# 自动检测模式（推荐）
+python gemini.py
+
+# 强制无头模式（确保在无图形界面服务器上运行）
+python gemini.py --headless
+
+# 强制有头模式（调试用，需要 X11 转发或 VNC）
+python gemini.py --headed
+```
+
+### 命令行参数
+
+| 参数 | 说明 |
+|------|------|
+| `--headless` | 强制使用无头模式，忽略系统检测结果 |
+| `--headed` | 强制使用有头模式（优先级高于 `--headless`） |
+
+### 环境变量
+
+也可以通过环境变量配置，适用于 Docker 或 systemd 部署：
+
+| 环境变量 | 值 | 说明 |
+|----------|-----|------|
+| `FORCE_HEADLESS` | `1` | 强制无头模式 |
+| `FORCE_HEADED` | `1` | 强制有头模式（优先级更高） |
+
+**优先级顺序**：`FORCE_HEADED` > `FORCE_HEADLESS` > 命令行参数 > 系统自动检测
+
+### Docker 部署配置
+
+在 `docker-compose.yml` 中设置：
+
+```yaml
+environment:
+  - FORCE_HEADLESS=1  # Docker 容器无图形界面，强制无头模式
+```
+
+### Systemd 服务配置
+
+在服务文件中添加环境变量：
+
+```ini
+[Service]
+Environment="FORCE_HEADLESS=1"
+# 其他配置...
+```
+
+### 调试 Cookie 刷新问题
+
+如果 Cookie 刷新失败，可以临时使用有头模式观察浏览器行为：
+
+```bash
+# macOS 或有图形界面的 Linux
+python gemini.py --headed
+```
+
+然后在 Web 控制台手动触发刷新，观察浏览器操作过程。
+
+## 🔄 远程同步与主从部署
+
+当你有多台服务器时，可以使用**主从部署**模式：一台 macOS 主控端负责刷新 Cookie，自动同步到多台 Linux 服务器。
+
+### 部署架构
+
+```
+┌─────────────────────┐                    ┌─────────────────────┐
+│   macOS 主控端       │                    │   Linux 服务器 A     │
+│   (Cookie 刷新机)    │    Cookie 同步      │   (只接收同步)       │
+│                     │ ──────────────────→ │                     │
+│ • 执行 Cookie 刷新   │                    │ • sync_only_mode    │
+│ • 有头模式便于调试    │                    │ • 无头模式运行       │
+│ • 配置远程同步 URL   │                    │ • 提供 API 服务      │
+└─────────────────────┘                    └─────────────────────┘
+                        │
+                        │ Cookie 同步
+                        ↓
+                ┌─────────────────────┐
+                │   Linux 服务器 B     │
+                │   (只接收同步)       │
+                └─────────────────────┘
+```
+
+### macOS 主控端配置
+
+1. **启用 Cookie 自动刷新**（Web 控制台 → 系统设置）
+
+2. **配置远程同步**：
+   - `remote_sync_url`: 服务器地址，如 `https://server-a.example.com`
+   - `remote_sync_api_key`: 服务器的管理员密钥
+
+3. **启动服务**：
+```bash
+# macOS 默认有头模式
+python gemini.py
+```
+
+### Linux 服务器端配置
+
+1. **启用"只接收同步"模式**（Web 控制台 → 系统设置 → 勾选 "只接收同步模式"）
+
+2. **启动服务**：
+```bash
+# 强制无头模式（服务器无图形界面）
+python gemini.py --headless
+```
+
+或使用环境变量：
+```bash
+export FORCE_HEADLESS=1
+python gemini.py
+```
+
+### 配置项说明
+
+| 配置项 | 配置位置 | 说明 |
+|--------|----------|------|
+| `remote_sync_url` | 主控端 | 远程服务器 URL |
+| `remote_sync_api_key` | 主控端 | 远程服务器的管理员密钥 |
+| `sync_only_mode` | 服务器端 | 启用后不主动刷新，只接收同步 |
+| `auto_refresh_cookie` | 主控端 | 启用 Cookie 自动刷新 |
+
+### 工作流程
+
+1. 主控端检测到 Cookie 过期
+2. 主控端执行自动刷新（使用临时邮箱登录）
+3. 刷新成功后，自动推送到配置的远程服务器
+4. 服务器端接收并更新 Cookie
+
+### 同步多台服务器
+
+目前每次只能配置一个远程同步地址。如需同步多台服务器，可以：
+
+1. **方案一**：部署反向代理，将同步请求转发到多台服务器
+2. **方案二**：使用 Nginx 负载均衡
+3. **方案三**：在服务器间再配置级联同步
+
 ## ⚙️ 配置说明
 
 系统现在主要使用**数据库**存储配置，所有配置都可以通过 Web 管理界面完成。详细说明请参考 [首次使用指南](./getting-started.md)。

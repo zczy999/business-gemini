@@ -1824,6 +1824,12 @@ def register_routes(app):
                 start_auto_refresh_thread()
         if "tempmail_worker_url" in data:
             account_manager.config["tempmail_worker_url"] = data["tempmail_worker_url"] or None
+        if "remote_sync_url" in data:
+            account_manager.config["remote_sync_url"] = data["remote_sync_url"] or ""
+        if "remote_sync_api_key" in data:
+            account_manager.config["remote_sync_api_key"] = data["remote_sync_api_key"] or ""
+        if "sync_only_mode" in data:
+            account_manager.config["sync_only_mode"] = bool(data["sync_only_mode"])
         if "log_level" in data:
             try:
                 set_log_level(data["log_level"], persist=True)
