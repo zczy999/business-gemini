@@ -68,9 +68,15 @@ def create_admin_token(exp_seconds: int = 86400) -> str:
 
 
 def verify_admin_token(token: str) -> bool:
-    """验证管理员 token"""
+    """验证管理员 token 或 admin_secret_key"""
     if not token:
         return False
+
+    # 1. 直接检查是否是 admin_secret_key（用于远程同步等场景）
+    if hmac.compare_digest(token, get_admin_secret_key()):
+        return True
+
+    # 2. 检查是否是签名的 admin token
     try:
         b64, sig = token.split(".", 1)
     except ValueError:
