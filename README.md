@@ -341,6 +341,29 @@ python gemini.py --port 8001
 python gemini.py --host 127.0.0.1 --port 8000
 ```
 
+#### Cookie 刷新浏览器模式
+
+Cookie 自动刷新功能使用 Playwright 浏览器，根据运行环境需要配置不同模式：
+
+| 环境 | 默认模式 | 说明 |
+|------|----------|------|
+| **macOS** | 有头模式 | 浏览器可视化运行，便于调试 |
+| **Linux** | 自动检测 | 有图形界面用有头模式，无图形界面用无头模式 |
+| **Docker** | 需配置 | 建议设置 `FORCE_HEADLESS=1` |
+
+```bash
+# macOS 默认有头模式，直接启动即可
+python gemini.py
+
+# 强制无头模式（适用于服务器后台运行）
+python gemini.py --headless
+
+# 强制有头模式（调试 Cookie 刷新问题时使用）
+python gemini.py --headed
+```
+
+详细配置请参考 [部署指南](./docs/guides/deployment.md#-cookie-自动刷新模式配置)。
+
 服务将在指定地址启动（默认：Windows `http://127.0.0.1:8000`，Linux `http://0.0.0.0:8000`）。
 
 ### 访问管理控制台
@@ -478,6 +501,7 @@ curl -X POST http://127.0.0.1:8000/v1/chat/completions \
 7. **环境变量配置**: 生产环境建议设置以下环境变量：
    - `API_KEY_ENCRYPTION_KEY`: API 密钥加密密钥（32字节）
    - `ADMIN_SECRET_KEY`: 管理员密钥（可选，系统会自动生成）
+8. **主从部署**: 支持 macOS 主控端刷新 Cookie 并同步到 Linux 服务器，详见 [远程同步与主从部署](./docs/guides/deployment.md#-远程同步与主从部署)
 
 ## 🙏 致谢
 

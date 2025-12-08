@@ -41,10 +41,10 @@ def sync_cookie_to_remote(account_idx: int, cookie_data: Dict[str, Any]) -> bool
     url = f"{remote_url.rstrip('/')}/api/accounts/{account_idx}"
     headers = {
         "Content-Type": "application/json",
-        "X-Admin-Key": api_key
+        "X-Admin-Token": api_key
     }
 
-    # 准备同步��据
+    # 准备同步数据
     sync_data = {
         "secure_c_ses": cookie_data.get("secure_c_ses", ""),
         "host_c_oses": cookie_data.get("host_c_oses", ""),
@@ -90,14 +90,14 @@ def test_remote_connection() -> Dict[str, Any]:
     api_key = sync_config["api_key"]
 
     if not remote_url:
-        return {"success": False, "message": "未配置远程���务器地址"}
+        return {"success": False, "message": "未配置远程服务器地址"}
 
     if not api_key:
         return {"success": False, "message": "未配置 API Key"}
 
     # 尝试访问账号列表 API 测试连接
     url = f"{remote_url.rstrip('/')}/api/accounts"
-    headers = {"X-Admin-Key": api_key}
+    headers = {"X-Admin-Token": api_key}
 
     try:
         response = requests.get(url, headers=headers, timeout=10)
